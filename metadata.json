@@ -1,0 +1,8 @@
+{
+  "name": "Capoeira Nossa Nação",
+  "description": "Sistema de gestão de alunos, mensalidades, produtos em débito e histórico financeiro da Capoeira Nossa Nação.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
