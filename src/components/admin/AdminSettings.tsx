@@ -105,9 +105,9 @@ export function AdminSettings() {
 
           <div className="p-3.5 bg-[#101113] rounded-xl border border-neutral-800 space-y-1">
             <span className="text-[10px] uppercase font-mono text-neutral-400">
-              Mensalidade Padrão / Vencimento
+              Política de Mensalidade
             </span>
-            <p className="font-bold text-neutral-200">R$ 120,00 • Todo dia 10</p>
+            <p className="font-bold text-neutral-200">Configuração Individual por Aluno</p>
           </div>
         </div>
       </div>

@@ -35,6 +35,18 @@ export function StudentFees() {
 
   useEffect(() => {
     loadFees();
+
+    const onFinancialUpdated = () => {
+      loadFees();
+    };
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
+    const onFocus = () => loadFees();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [loadFees]);
 
   return (

@@ -21,11 +21,25 @@ export function StudentProfile() {
             date_of_birth: st.date_of_birth,
             address: st.address,
             whatsapp: st.whatsapp,
+            guardian_name: st.guardian_name,
+            guardian_phone: st.guardian_phone,
             email: (st as any).email || authProfile?.email,
             active: st.active,
           });
         }
       });
+    } else if (authProfile?.id) {
+      setProfile(authProfile);
+      // Busca dados complementares do estudante (como guardian_name)
+      dbService.getStudentById(authProfile.id).then((st) => {
+        if (st) {
+          setProfile((prev: any) => ({
+            ...prev,
+            guardian_name: st.guardian_name || prev?.guardian_name,
+            guardian_phone: st.guardian_phone || prev?.guardian_phone,
+          }));
+        }
+      }).catch(() => {});
     } else {
       setProfile(authProfile);
     }
@@ -115,6 +129,16 @@ export function StudentProfile() {
             </span>
             <p className="font-semibold text-neutral-200">{profile?.address || '-'}</p>
           </div>
+
+          {profile?.guardian_name && (
+            <div className="p-3.5 bg-black/40 rounded-2xl border border-white/[0.06] space-y-1 sm:col-span-2">
+              <span className="text-[10px] uppercase font-mono text-neutral-400 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-amber-400" />
+                Nome do Pai / Mãe ou Responsável
+              </span>
+              <p className="font-semibold text-neutral-200">{profile.guardian_name}</p>
+            </div>
+          )}
         </div>
 
         {/* Notice regarding updates */}

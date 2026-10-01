@@ -19,6 +19,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
   const [whatsapp, setWhatsapp] = useState('');
   const [guardianName, setGuardianName] = useState('');
   const [guardianPhone, setGuardianPhone] = useState('');
+  const [isScholarship, setIsScholarship] = useState(false);
+  const [dueDay, setDueDay] = useState<number | string>('');
   const [loading, setLoading] = useState(false);
 
   const calculatedAge = useMemo(() => {
@@ -50,6 +52,11 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
 
     setLoading(true);
     try {
+      const parsedDueDay =
+        typeof dueDay === 'string'
+          ? dueDay ? parseInt(dueDay, 10) : null
+          : dueDay;
+
       const created = await dbService.addStudent({
         fullName: fullName.trim(),
         nickname: nickname.trim() || undefined,
@@ -59,6 +66,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
         guardianName: guardianName.trim() || undefined,
         guardianPhone: guardianPhone.trim() || undefined,
         registrationType: 'admin_created',
+        isScholarship,
+        dueDay: parsedDueDay && !isNaN(parsedDueDay) ? parsedDueDay : null,
       });
 
       success(`Aluno ${created.full_name} cadastrado com sucesso!`);
@@ -221,7 +230,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nome do Pai, Mãe ou Responsável
+                  Nome do Pai / Mãe ou Responsável <span className="text-gray-400 font-normal">(opcional)</span>
                 </label>
                 <input
                   id="student-guardian-name-input"
@@ -246,6 +255,46 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Opções Financeiras: Bolsista e Vencimento */}
+          <div className="rounded-2xl p-4 border border-purple-200 bg-purple-50/50 space-y-3">
+            <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-purple-900">
+              <ShieldCheck className="h-4 w-4 text-purple-600" />
+              <span>Condições de Mensalidade</span>
+            </div>
+
+            <div className="flex items-center space-x-2.5">
+              <input
+                id="add-student-is-scholarship"
+                type="checkbox"
+                checked={isScholarship}
+                onChange={(e) => setIsScholarship(e.target.checked)}
+                className="h-4 w-4 rounded-sm border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label htmlFor="add-student-is-scholarship" className="text-xs font-bold text-purple-950 cursor-pointer">
+                Aluno Bolsista (Isento de cobrança de mensalidade)
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Dia Base de Vencimento Padrão (1 a 31) <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <input
+                id="add-student-due-day"
+                type="number"
+                min="1"
+                max="31"
+                value={dueDay}
+                onChange={(e) => setDueDay(e.target.value)}
+                placeholder="Ex: 10, 15, 20..."
+                className="w-full sm:w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Dia fixo do mês em que as mensalidades recorrentes deverão vencer.
+              </p>
             </div>
           </div>
 

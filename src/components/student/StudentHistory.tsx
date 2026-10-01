@@ -62,6 +62,14 @@ export function StudentHistory() {
 
   useEffect(() => {
     loadHistory();
+    const onFinancialUpdated = () => loadHistory();
+    const onFocus = () => loadHistory();
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [loadHistory]);
 
   // Cálculos de totais de pagamentos válidos (excluindo revertidos)

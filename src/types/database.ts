@@ -1,7 +1,7 @@
 export type UserRole = 'student' | 'admin';
 export type StudentRegistrationType = 'self_registered' | 'admin_created';
 
-export type MonthlyFeeStatus = 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled';
+export type MonthlyFeeStatus = 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled' | 'scholarship';
 export type ProductDebtStatus = 'open' | 'partial' | 'paid' | 'cancelled';
 export type PaymentType = 'monthly_fee' | 'product' | 'adjustment';
 export type PaymentMethod = 'pix' | 'dinheiro' | 'cartao' | 'transferencia' | 'outro';
@@ -24,29 +24,27 @@ export interface Profile {
   address: string;
   whatsapp: string;
   whatsapp_normalized: string;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
+  guardian_phone_normalized?: string | null;
   role: UserRole;
   active: boolean;
+  is_scholarship?: boolean;
+  due_day?: number | null;
+  monthly_fee_amount?: number | null;
+  fee_amount?: number | null;
+  financial_start_date?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deletion_reason?: string | null;
   created_at: string;
   updated_at?: string;
 }
 
-export interface Student {
-  id: string;
+export interface Student extends Profile {
   auth_user_id?: string | null;
-  full_name: string;
-  nickname?: string | null;
-  date_of_birth: string; // YYYY-MM-DD
-  address: string;
-  whatsapp?: string | null;
-  whatsapp_normalized?: string | null;
-  guardian_name?: string | null;
-  guardian_phone?: string | null;
-  guardian_phone_normalized?: string | null;
-  registration_type: StudentRegistrationType;
-  active: boolean;
-  email?: string | null;
-  created_at: string;
-  updated_at?: string;
+  user_id?: string | null;
+  registration_type?: StudentRegistrationType;
 }
 
 export interface MonthlyFee {
@@ -59,9 +57,13 @@ export interface MonthlyFee {
   remaining_amount: number;
   due_date: string; // YYYY-MM-DD
   status: MonthlyFeeStatus;
+  is_scholarship?: boolean;
   notes?: string | null;
   created_by?: string | null;
   auto_generated_from_fee_id?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deletion_reason?: string | null;
   created_at: string;
   updated_at?: string;
   paid_at?: string | null;
@@ -80,6 +82,9 @@ export interface Product {
   description?: string | null;
   price: number;
   active: boolean;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deletion_reason?: string | null;
   created_at: string;
   updated_at?: string;
 }
@@ -97,6 +102,9 @@ export interface ProductDebt {
   status: ProductDebtStatus;
   notes?: string | null;
   created_by?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deletion_reason?: string | null;
   created_at: string;
   updated_at?: string;
   paid_at?: string | null;
@@ -120,6 +128,9 @@ export interface Payment {
   reversed_by?: string | null;
   reversed_by_email?: string | null;
   reversal_reason?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deletion_reason?: string | null;
   paid_at: string;
   created_at: string;
   student?: Student | Profile;
@@ -139,6 +150,9 @@ export interface FinancialMovement {
   performed_by_email?: string | null;
   created_by_email?: string | null;
   notes?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deletion_reason?: string | null;
   created_at: string;
   student?: Student | Profile;
 }
@@ -149,7 +163,54 @@ export interface InternalNote {
   text: string;
   created_by?: string | null;
   created_by_email?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deletion_reason?: string | null;
   created_at: string;
+}
+
+export interface AdminActionLog {
+  id: string;
+  admin_id?: string | null;
+  admin_email?: string | null;
+  action_type:
+    | 'CREATE'
+    | 'UPDATE'
+    | 'PAYMENT'
+    | 'REVERSAL'
+    | 'SOFT_DELETE'
+    | 'RESTORE'
+    | 'PERMANENT_DELETE'
+    | 'ADJUSTMENT'
+    | 'STATUS_CHANGE'
+    | 'SCHOLARSHIP_CHANGE';
+  entity_type: 'student' | 'monthly_fee' | 'product_debt' | 'payment' | 'financial_movement' | 'internal_note';
+  entity_id: string;
+  student_id?: string | null;
+  summary: string;
+  before_data?: any;
+  after_data?: any;
+  metadata?: any;
+  can_undo: boolean;
+  reverted_at?: string | null;
+  reverted_by?: string | null;
+  reversal_reason?: string | null;
+  created_at: string;
+}
+
+export interface TrashItem {
+  id: string;
+  entityType: 'student' | 'monthly_fee' | 'product_debt' | 'payment' | 'financial_movement' | 'internal_note';
+  entityTitle: string;
+  studentId?: string | null;
+  studentName?: string | null;
+  description: string;
+  amount?: number | null;
+  originalDate?: string | null;
+  deletedAt: string;
+  deletedBy?: string | null;
+  deletionReason?: string | null;
+  rawData: any;
 }
 
 export interface SystemSettings {

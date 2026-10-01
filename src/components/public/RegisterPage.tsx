@@ -22,6 +22,7 @@ export function RegisterPage() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [address, setAddress] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [guardianName, setGuardianName] = useState('');
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showSetupModal, setShowSetupModal] = useState(false);
@@ -103,6 +104,7 @@ export function RegisterPage() {
         address: address.trim(),
         whatsapp: whatsapp.trim(),
         whatsappNormalized: normPhone,
+        guardianName: guardianName.trim() || undefined,
       });
 
       if (signUpError) {
@@ -346,6 +348,24 @@ export function RegisterPage() {
               placeholder="Rua, Número, Bairro, Cidade - UF"
               className="w-full px-3.5 py-2.5 bg-[#101113] border border-neutral-700 rounded-xl text-sm text-neutral-100 placeholder-neutral-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
             />
+          </div>
+
+          {/* Nome do Pai/Mãe (opcional) */}
+          <div>
+            <label htmlFor="input-guardian-name" className="block text-xs font-semibold text-neutral-300 mb-1 uppercase tracking-wider">
+              Nome do Pai / Mãe <span className="text-neutral-500 font-normal lowercase tracking-normal">(opcional)</span>
+            </label>
+            <input
+              id="input-guardian-name"
+              type="text"
+              value={guardianName}
+              onChange={(e) => setGuardianName(e.target.value)}
+              placeholder="Ex: Nome da mãe, pai ou responsável"
+              className="w-full px-3.5 py-2.5 bg-[#101113] border border-neutral-700 rounded-xl text-sm text-neutral-100 placeholder-neutral-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
+            />
+            <p className="text-[11px] text-neutral-500 mt-0.5">
+              Opcional. Recomendado para alunos menores de idade ou contato de emergência.
+            </p>
           </div>
 
           {/* LGPD / Termos Checkbox */}

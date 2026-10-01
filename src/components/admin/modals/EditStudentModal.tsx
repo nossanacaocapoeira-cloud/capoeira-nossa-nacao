@@ -27,6 +27,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   const [guardianName, setGuardianName] = useState(student.guardian_name || '');
   const [guardianPhone, setGuardianPhone] = useState(student.guardian_phone || '');
   const [active, setActive] = useState(student.active ?? true);
+  const [isScholarship, setIsScholarship] = useState<boolean>(student.is_scholarship ?? false);
+  const [dueDay, setDueDay] = useState<number | string>(student.due_day ?? '');
   const [loading, setLoading] = useState(false);
 
   const calculatedAge = useMemo(() => {
@@ -54,6 +56,11 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
     setLoading(true);
     try {
+      const parsedDueDay =
+        typeof dueDay === 'string'
+          ? dueDay ? parseInt(dueDay, 10) : null
+          : dueDay;
+
       await dbService.updateStudent(student.id, {
         fullName: fullName.trim(),
         nickname: nickname.trim() || undefined,
@@ -63,6 +70,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         guardianName: guardianName.trim() || undefined,
         guardianPhone: guardianPhone.trim() || undefined,
         active,
+        isScholarship,
+        dueDay: parsedDueDay && !isNaN(parsedDueDay) ? parsedDueDay : null,
       });
 
       success('Dados do aluno atualizados com sucesso!');
@@ -214,7 +223,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nome do Pai, Mãe ou Responsável
+                  Nome do Pai / Mãe ou Responsável <span className="text-gray-400 font-normal">(opcional)</span>
                 </label>
                 <input
                   id="edit-student-guardian-name"
@@ -237,6 +246,46 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Configurações Financeiras: Bolsista e Dia de Vencimento */}
+          <div className="rounded-2xl p-4 border border-purple-200 bg-purple-50/50 space-y-3">
+            <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-purple-900">
+              <ShieldCheck className="h-4 w-4 text-purple-600" />
+              <span>Condições de Mensalidade</span>
+            </div>
+
+            <div className="flex items-center space-x-2.5">
+              <input
+                id="edit-student-is-scholarship"
+                type="checkbox"
+                checked={isScholarship}
+                onChange={(e) => setIsScholarship(e.target.checked)}
+                className="h-4 w-4 rounded-sm border-purple-300 text-purple-600 focus:ring-purple-500"
+              />
+              <label htmlFor="edit-student-is-scholarship" className="text-xs font-bold text-purple-950 cursor-pointer">
+                Aluno Bolsista (Isento de cobrança de mensalidade)
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Dia Base de Vencimento da Mensalidade (1 a 31)
+              </label>
+              <input
+                id="edit-student-due-day"
+                type="number"
+                min="1"
+                max="31"
+                value={dueDay}
+                onChange={(e) => setDueDay(e.target.value)}
+                placeholder="Ex: 10, 15, 20..."
+                className="w-full sm:w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Usado como dia padrão fixo para a geração de mensalidades recorrentes.
+              </p>
             </div>
           </div>
 

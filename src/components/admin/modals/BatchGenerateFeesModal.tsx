@@ -26,7 +26,7 @@ export function BatchGenerateFeesModal({ isOpen, onClose, onSuccess }: BatchGene
   const currentMonthName = `${ptMonths[now.getMonth()]}/${now.getFullYear()}`;
 
   const [referenceMonth, setReferenceMonth] = useState(currentMonthName);
-  const [defaultAmount, setDefaultAmount] = useState<number>(120);
+  const [defaultAmount, setDefaultAmount] = useState<number>(50);
   const [dueDay, setDueDay] = useState<number>(10);
   const [activeCount, setActiveCount] = useState<number>(0);
   const [alreadyBilledCount, setAlreadyBilledCount] = useState<number>(0);

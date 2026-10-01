@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigation } from '../../contexts/NavigationContext';
-import { dbService } from '../../lib/dbService';
+import { dbService, getDeletedRecordsRegistry } from '../../lib/dbService';
 import { supabase } from '../../lib/supabase';
 import { Product, ProductDebt } from '../../types/database';
 import { formatCurrency, formatDate } from '../../lib/utils';
@@ -64,16 +64,30 @@ export function AdminProducts() {
 
   const loadDebts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('product_debts')
-        .select(`
-          *,
-          student:profiles!product_debts_student_id_fkey(full_name, nickname)
-        `)
-        .order('created_at', { ascending: false });
+      const [debtsRes, profRes, deletedReg] = await Promise.all([
+        supabase
+          .from('product_debts')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('*'),
+        getDeletedRecordsRegistry(),
+      ]);
 
-      if (error) throw error;
-      setDebts(data || []);
+      const profileMap = new Map<string, { full_name: string; nickname?: string }>();
+      for (const p of profRes.data || []) {
+        profileMap.set(p.id, { full_name: p.full_name, nickname: p.nickname });
+      }
+
+      const enriched = (debtsRes.data || [])
+        .filter((d: any) => !d.deleted_at && d.status !== 'cancelled' && !deletedReg.debtIds.has(d.id))
+        .map((d: any) => ({
+          ...d,
+          student: d.student || profileMap.get(d.student_id) || undefined,
+        }));
+
+      setDebts(enriched);
     } catch (err) {
       console.error('Erro ao carregar débitos de produtos:', err);
     } finally {
@@ -95,6 +109,11 @@ export function AdminProducts() {
   useEffect(() => {
     loadDebts();
     loadCatalog();
+    const onFinancialUpdated = () => {
+      loadDebts();
+    };
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
+    return () => window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
   }, [loadDebts, loadCatalog]);
 
   const openNewProductModal = () => {
@@ -171,7 +190,9 @@ export function AdminProducts() {
     }
   };
 
-  const openDebtsOnly = debts.filter((d) => d.status !== 'paid');
+  const openDebtsOnly = debts.filter(
+    (d) => Number(d.remaining_amount) > 0 && d.status !== 'paid' && d.status !== 'cancelled'
+  );
 
   return (
     <div className="space-y-6">

@@ -258,7 +258,13 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main Admin Content Canvas */}
-      <main className="flex-1 min-w-0 p-4 sm:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
+      <main
+        className={`flex-1 min-w-0 w-full overflow-y-auto ${
+          path.startsWith('/admin/mensalidades')
+            ? 'p-2 sm:p-4 max-w-none'
+            : 'p-4 sm:p-8 max-w-7xl mx-auto'
+        }`}
+      >
         {children}
       </main>
 

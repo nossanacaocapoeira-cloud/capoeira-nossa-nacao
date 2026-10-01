@@ -39,8 +39,13 @@ export function AdminDashboard() {
   useEffect(() => {
     loadData();
     const onFocus = () => loadData();
+    const onFinancialUpdated = () => loadData();
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
+    };
   }, [loadData]);
 
   return (
@@ -179,7 +184,11 @@ export function AdminDashboard() {
             <div className="text-3xl font-black text-neutral-100 font-mono">
               {loading ? '-' : data?.totalStudents ?? 0}
             </div>
-            <p className="text-xs text-neutral-400 mt-1">Alunos ativos cadastrados</p>
+            <p className="text-xs text-neutral-400 mt-1">
+              {data?.activeStudentsCount !== undefined
+                ? `${data.activeStudentsCount} ativos • ${data.totalStudents} total`
+                : 'Alunos cadastrados no sistema'}
+            </p>
           </div>
         </div>
 

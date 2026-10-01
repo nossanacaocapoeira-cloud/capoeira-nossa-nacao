@@ -12,6 +12,7 @@ interface SignUpPayload {
   address: string;
   whatsapp: string;
   whatsappNormalized: string;
+  guardianName?: string;
 }
 
 interface AuthContextType {
@@ -156,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             address: payload.address.trim(),
             whatsapp: payload.whatsapp.trim(),
             whatsapp_normalized: payload.whatsappNormalized,
+            guardian_name: payload.guardianName?.trim() || null,
           },
         },
       });

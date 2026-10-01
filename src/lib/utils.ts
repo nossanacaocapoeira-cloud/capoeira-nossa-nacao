@@ -61,6 +61,37 @@ export function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '');
 }
 
+/**
+ * Normaliza strings para busca insensível a maiúsculas/minúsculas e acentos (ex: Antônio -> antonio)
+ */
+export function normalizeSearch(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Retorna 'YYYY-MM' no fuso horário oficial America/Sao_Paulo a partir de uma data ou timestamp
+ */
+export function getSaoPauloYearMonth(dateString: string | null | undefined): string | null {
+  if (!dateString) return null;
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return null;
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+    });
+    return formatter.format(d); // Formato 'YYYY-MM'
+  } catch {
+    return String(dateString).substring(0, 7);
+  }
+}
+
 export function maskPhone(value: string): string {
   const digits = normalizePhone(value).slice(0, 11);
   if (!digits) return '';
@@ -90,27 +121,9 @@ export function isOverdue(
   if (!dueDate || typeof dueDate !== 'string') return false;
 
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // If format YYYY-MM-DD
-    const parts = dueDate.trim().split('-');
-    if (parts.length === 3) {
-      const year = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const day = parseInt(parts[2], 10);
-      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-        const due = new Date(year, month, day);
-        return due < today;
-      }
-    }
-
-    const due = new Date(dueDate);
-    if (!isNaN(due.getTime())) {
-      due.setHours(0, 0, 0, 0);
-      return due < today;
-    }
-    return false;
+    const todayStr = getSaoPauloDateString();
+    const cleanDue = dueDate.trim().substring(0, 10);
+    return cleanDue < todayStr;
   } catch {
     return false;
   }
@@ -122,14 +135,20 @@ export const PT_MONTHS = [
 ];
 
 /**
+ * Returns current date in YYYY-MM-DD format strictly in America/Sao_Paulo timezone.
+ */
+export function getSaoPauloDateString(): string {
+  const { year, month, day } = getSaoPauloDate();
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
  * Returns the current local date in YYYY-MM-DD format based strictly on the user's local device/browser,
  * preventing any UTC conversion off-by-one errors.
  */
 export function getTodayLocalDateString(dateInput: Date = new Date()): string {
-  const year = dateInput.getFullYear();
-  const month = String(dateInput.getMonth() + 1).padStart(2, '0');
-  const day = String(dateInput.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // Prefer America/Sao_Paulo date string for financial calculations
+  return getSaoPauloDateString();
 }
 
 /**
@@ -202,6 +221,39 @@ export function deriveReferenceMonth(referenceDateStr: string): string {
 
   const monthName = PT_MONTHS[month - 1] || 'Setembro';
   return `${monthName}/${year}`;
+}
+
+/**
+ * Checks if a value is a valid UUID v4
+ */
+export function isUuid(val: any): boolean {
+  if (!val || typeof val !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val.trim());
+}
+
+/**
+ * Converts any reference month into a standardized ISO date for the 1st of that month (YYYY-MM-01).
+ * Suitable for PostgreSQL DATE or TEXT columns.
+ */
+export function toReferenceMonthIso(val: string | null | undefined): string {
+  if (!val) {
+    const today = getTodayLocalDateString();
+    return `${today.substring(0, 7)}-01`;
+  }
+  const iso = toIsoDateString(val, 1);
+  if (/^\d{4}-\d{2}/.test(iso)) {
+    return `${iso.substring(0, 7)}-01`;
+  }
+  const today = getTodayLocalDateString();
+  return `${today.substring(0, 7)}-01`;
+}
+
+/**
+ * Extracts standard YYYY-MM competence prefix from any reference string.
+ */
+export function toReferenceYearMonth(val: string | null | undefined): string {
+  const refIso = toReferenceMonthIso(val);
+  return refIso.substring(0, 7);
 }
 
 /**
@@ -286,58 +338,81 @@ export function formatReferenceDisplay(ref: string | null | undefined): string {
  * Calculates the next reference month and due date, preserving the exact due day.
  * Returns reference month as ISO date string (YYYY-MM-DD) for database compatibility,
  * and nextDescription for user readability.
+ * NEVER skips months (e.g. 17/09 -> 17/10 -> 17/11).
  */
 export function getNextMonthlyFeeDetails(
   referenceMonth: string,
-  dueDate: string
+  dueDate: string,
+  baseDueDay?: number | null
 ): { nextReferenceMonth: string; nextDueDate: string; nextDescription: string } {
-  // 1. Calculate next due date
-  let dueYear = 2026;
-  let dueMonth = 9; // 1-based
-  let dueDay = 10;
+  // 1. Determine reference month and year (competência)
+  let refYear = 2026;
+  let refMonth = 9; // 1-based
+  let refDay = 17;
 
-  if (dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-    const parts = dueDate.split('-');
-    dueYear = parseInt(parts[0], 10);
-    dueMonth = parseInt(parts[1], 10);
-    dueDay = parseInt(parts[2], 10);
-  } else if (dueDate) {
-    const d = new Date(dueDate);
+  if (referenceMonth && /^\d{4}-\d{2}-\d{2}$/.test(referenceMonth.trim())) {
+    const parts = referenceMonth.trim().split('-');
+    refYear = parseInt(parts[0], 10);
+    refMonth = parseInt(parts[1], 10);
+    refDay = parseInt(parts[2], 10);
+  } else if (referenceMonth) {
+    const d = new Date(referenceMonth);
     if (!isNaN(d.getTime())) {
-      dueYear = d.getFullYear();
-      dueMonth = d.getMonth() + 1;
-      dueDay = d.getDate();
+      refYear = d.getFullYear();
+      refMonth = d.getMonth() + 1;
+      refDay = d.getDate();
     }
   }
 
-  // Advance by 1 month
-  let nextDueYear = dueYear;
-  let nextDueMonth = dueMonth + 1;
-  if (nextDueMonth > 12) {
-    nextDueMonth = 1;
-    nextDueYear += 1;
+  // 2. Determine base due day
+  let dueDay = baseDueDay || refDay || 17;
+  if (dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
+    const parts = dueDate.trim().split('-');
+    if (!baseDueDay) {
+      dueDay = parseInt(parts[2], 10);
+    }
   }
 
-  // Handle month boundary (e.g. 31st on a 30-day month)
-  const maxDaysInNextMonth = new Date(nextDueYear, nextDueMonth, 0).getDate();
-  const actualDueDay = Math.min(dueDay, maxDaysInNextMonth);
+  // 3. Advance reference by EXACTLY 1 month (no month skipping)
+  let nextRefYear = refYear;
+  let nextRefMonth = refMonth + 1;
+  if (nextRefMonth > 12) {
+    nextRefMonth = 1;
+    nextRefYear += 1;
+  }
 
+  const maxDaysInNextRefMonth = new Date(nextRefYear, nextRefMonth, 0).getDate();
+  const actualRefDay = Math.min(refDay, maxDaysInNextRefMonth);
+  const nextReferenceMonth = `${nextRefYear}-${String(nextRefMonth).padStart(2, '0')}-${String(actualRefDay).padStart(2, '0')}`;
+
+  // 4. Calculate next due date:
+  // If the previous due date was in the same month as reference, next due date is in nextRefMonth.
+  // If the previous due date was 1 month ahead of reference, next due date is 1 month ahead of nextRefMonth.
+  let dueDateIsNextMonth = false;
+  if (dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
+    const dParts = dueDate.trim().split('-');
+    const dMonth = parseInt(dParts[1], 10);
+    if (dMonth === nextRefMonth || (refMonth === 12 && dMonth === 1)) {
+      dueDateIsNextMonth = true;
+    }
+  }
+
+  let nextDueYear = nextRefYear;
+  let nextDueMonth = nextRefMonth;
+  if (dueDateIsNextMonth) {
+    nextDueMonth += 1;
+    if (nextDueMonth > 12) {
+      nextDueMonth = 1;
+      nextDueYear += 1;
+    }
+  }
+
+  const maxDaysInNextDueMonth = new Date(nextDueYear, nextDueMonth, 0).getDate();
+  const actualDueDay = Math.min(dueDay, maxDaysInNextDueMonth);
   const nextDueDate = `${nextDueYear}-${String(nextDueMonth).padStart(2, '0')}-${String(actualDueDay).padStart(2, '0')}`;
 
-  // 2. Calculate next reference date in ISO format YYYY-MM-DD
-  // Use the reference date day if available, otherwise 1st of the month
-  let refDay = 1;
-  if (referenceMonth && /^\d{4}-\d{2}-\d{2}$/.test(referenceMonth.trim())) {
-    const parts = referenceMonth.trim().split('-');
-    refDay = parseInt(parts[2], 10) || 1;
-  }
-
-  const maxDaysRefMonth = new Date(nextDueYear, nextDueMonth, 0).getDate();
-  const actualRefDay = Math.min(refDay, maxDaysRefMonth);
-  const nextReferenceMonth = `${nextDueYear}-${String(nextDueMonth).padStart(2, '0')}-${String(actualRefDay).padStart(2, '0')}`;
-
-  const monthLabel = PT_MONTHS[nextDueMonth - 1] || 'Mês';
-  const nextDescription = `Mensalidade ${monthLabel}/${nextDueYear}`;
+  const monthLabel = PT_MONTHS[nextRefMonth - 1] || 'Mês';
+  const nextDescription = `Mensalidade ${monthLabel}/${nextRefYear}`;
 
   return {
     nextReferenceMonth,
@@ -459,3 +534,55 @@ export function getBirthdayCountdownLabel(birthDay: number, currentDay: number):
 export function formatWhatsAppForDisplay(phone: string | null | undefined): string {
   return maskPhone(phone);
 }
+
+/**
+ * Filtra e simplifica a exibição do histórico de movimentações financeiras:
+ * - Exibe apenas lançamentos administrativos relevantes (uma ação = uma linha visual)
+ * - Remove registros técnicos redundantes (sincronização, payment criado/atualizado, etc.)
+ */
+export function filterAdministrativeMovements<
+  T extends {
+    description?: string;
+    notes?: string | null;
+    type?: string;
+    student_id?: string;
+    reference_id?: string | null;
+    created_at?: string;
+  }
+>(movements: T[]): T[] {
+  const technicalKeywords = [
+    'sincronização',
+    'sincronizacao',
+    'sync',
+    'status atualizado',
+    'payment criado',
+    'payment atualizado',
+    'movimentação interna',
+    'movimentacao interna',
+    'atualização de status',
+    'auditoria interna',
+  ];
+
+  const filtered = movements.filter((m) => {
+    const desc = (m.description || '').toLowerCase();
+    const notes = (m.notes || '').toLowerCase();
+    const isTechnical = technicalKeywords.some((kw) => desc.includes(kw) || notes.includes(kw));
+    return !isTechnical;
+  });
+
+  // Deduplica eventos quase simultâneos para o mesmo aluno e referência
+  const result: T[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const m of filtered) {
+    const timeKey = m.created_at ? Math.floor(new Date(m.created_at).getTime() / 15000) : '';
+    const key = `${m.student_id || ''}_${m.reference_id || ''}_${m.type || ''}_${timeKey}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      result.push(m);
+    }
+  }
+
+  return result;
+}
+

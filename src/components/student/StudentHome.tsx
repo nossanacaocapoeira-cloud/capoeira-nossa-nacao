@@ -86,9 +86,11 @@ export function StudentHome() {
   useEffect(() => {
     loadSummary();
 
-    // Refetch on window focus
+    // Refetch on window focus or local financial event
     const onFocus = () => loadSummary();
+    const onFinancialUpdated = () => loadSummary();
     window.addEventListener('focus', onFocus);
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
 
     // Realtime subscription
     if (user) {
@@ -113,12 +115,14 @@ export function StudentHome() {
 
       return () => {
         window.removeEventListener('focus', onFocus);
+        window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
         supabase.removeChannel(feeSub);
       };
     }
 
     return () => {
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
     };
   }, [loadSummary, targetStudentId]);
 

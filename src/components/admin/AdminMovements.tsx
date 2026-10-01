@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
+import { getDeletedRecordsRegistry } from '../../lib/dbService';
 import { FinancialMovement } from '../../types/database';
-import { formatCurrency, formatDateTime } from '../../lib/utils';
+import { formatCurrency, formatDateTime, filterAdministrativeMovements } from '../../lib/utils';
 import { EmptyState } from '../common/EmptyState';
 import { History, Search, RefreshCw, Calendar, ShoppingBag, Sliders, ArrowDownLeft } from 'lucide-react';
 
@@ -16,16 +17,43 @@ export function AdminMovements() {
 
   const loadMovements = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('financial_movements')
-        .select(`
-          *,
-          student:profiles!financial_movements_student_id_fkey(full_name, nickname)
-        `)
-        .order('created_at', { ascending: false });
+      const [movRes, profRes, deletedReg] = await Promise.all([
+        supabase
+          .from('financial_movements')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('*'),
+        getDeletedRecordsRegistry(),
+      ]);
 
-      if (error) throw error;
-      setMovements(data || []);
+      if (movRes.error) throw movRes.error;
+
+      const profileMap = new Map<string, { full_name: string; nickname?: string }>();
+      for (const p of profRes.data || []) {
+        profileMap.set(p.id, { full_name: p.full_name, nickname: p.nickname });
+      }
+
+      const validMovements = (movRes.data || [])
+        .filter((m: any) => {
+          if (m.deleted_at) return false;
+          if (
+            m.reference_id &&
+            (deletedReg.paymentIds.has(m.reference_id) ||
+              deletedReg.feeIds.has(m.reference_id) ||
+              deletedReg.debtIds.has(m.reference_id))
+          ) {
+            return false;
+          }
+          return true;
+        })
+        .map((m: any) => ({
+          ...m,
+          student: m.student || profileMap.get(m.student_id) || undefined,
+        }));
+
+      setMovements(validMovements);
     } catch (err) {
       console.error('Erro ao carregar movimentações:', err);
     } finally {
@@ -36,9 +64,17 @@ export function AdminMovements() {
 
   useEffect(() => {
     loadMovements();
+    const onFinancialUpdated = () => loadMovements();
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
+    return () => window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
   }, [loadMovements]);
 
-  const filtered = movements.filter((m) => {
+  // Filtra lançamentos administrativos relevantes (sem linhas técnicas redundantes)
+  const cleanMovements = useMemo(() => {
+    return filterAdministrativeMovements(movements);
+  }, [movements]);
+
+  const filtered = cleanMovements.filter((m) => {
     const studentName = (m.student?.full_name || '').toLowerCase();
     const nickname = (m.student?.nickname || '').toLowerCase();
     const desc = (m.description || '').toLowerCase();

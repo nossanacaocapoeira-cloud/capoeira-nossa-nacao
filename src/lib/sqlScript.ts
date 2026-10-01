@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   address TEXT NOT NULL,
   whatsapp TEXT NOT NULL,
   whatsapp_normalized TEXT NOT NULL,
+  guardian_name TEXT,
+  guardian_phone TEXT,
   role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
@@ -124,7 +126,7 @@ CREATE TABLE IF NOT EXISTS public.system_settings (
 -- Inserir configurações padrão se não existirem
 INSERT INTO public.system_settings (key, value)
 VALUES 
-  ('financial_defaults', '{"default_fee_amount": 120.00, "default_due_day": 10}'::jsonb)
+  ('financial_defaults', '{"default_fee_amount": 50.00, "default_due_day": 10}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- 10. ÍNDICES DE PERFORMANCE
@@ -163,12 +165,14 @@ DECLARE
   v_address TEXT;
   v_whatsapp TEXT;
   v_whatsapp_norm TEXT;
+  v_guardian_name TEXT;
 BEGIN
   v_full_name := COALESCE(new.raw_user_meta_data->>'full_name', 'Aluno');
   v_nickname  := COALESCE(new.raw_user_meta_data->>'nickname', v_full_name);
   v_address   := COALESCE(new.raw_user_meta_data->>'address', 'Não informado');
   v_whatsapp  := COALESCE(new.raw_user_meta_data->>'whatsapp', 'Não informado');
   v_whatsapp_norm := COALESCE(new.raw_user_meta_data->>'whatsapp_normalized', regexp_replace(v_whatsapp, '\\D', '', 'g'));
+  v_guardian_name := NULLIF(TRIM(COALESCE(new.raw_user_meta_data->>'guardian_name', '')), '');
   
   BEGIN
     v_dob := (new.raw_user_meta_data->>'date_of_birth')::date;
@@ -185,6 +189,7 @@ BEGIN
     address,
     whatsapp,
     whatsapp_normalized,
+    guardian_name,
     role,
     active
   ) VALUES (
@@ -196,6 +201,7 @@ BEGIN
     v_address,
     v_whatsapp,
     v_whatsapp_norm,
+    v_guardian_name,
     'student', -- Todo cadastro público nasce OBRIGATORIAMENTE como student
     true
   )
@@ -285,6 +291,14 @@ DROP POLICY IF EXISTS "payments_admin_insert" ON public.payments;
 CREATE POLICY "payments_admin_insert" ON public.payments
   FOR INSERT WITH CHECK (public.is_admin());
 
+DROP POLICY IF EXISTS "payments_admin_update" ON public.payments;
+CREATE POLICY "payments_admin_update" ON public.payments
+  FOR UPDATE USING (public.is_admin());
+
+DROP POLICY IF EXISTS "payments_admin_delete" ON public.payments;
+CREATE POLICY "payments_admin_delete" ON public.payments
+  FOR DELETE USING (public.is_admin());
+
 -- 19. POLÍTICAS RLS: FINANCIAL_MOVEMENTS
 DROP POLICY IF EXISTS "financial_movements_select" ON public.financial_movements;
 CREATE POLICY "financial_movements_select" ON public.financial_movements
@@ -293,6 +307,10 @@ CREATE POLICY "financial_movements_select" ON public.financial_movements
 DROP POLICY IF EXISTS "financial_movements_admin_insert" ON public.financial_movements;
 CREATE POLICY "financial_movements_admin_insert" ON public.financial_movements
   FOR INSERT WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "financial_movements_admin_delete" ON public.financial_movements;
+CREATE POLICY "financial_movements_admin_delete" ON public.financial_movements
+  FOR DELETE USING (public.is_admin());
 
 -- 20. POLÍTICAS RLS: INTERNAL_NOTES (SOMENTE ADMIN)
 DROP POLICY IF EXISTS "internal_notes_admin_all" ON public.internal_notes;

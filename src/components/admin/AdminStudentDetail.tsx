@@ -4,8 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { dbService, StudentFinancialSummary } from '../../lib/dbService';
 import { Profile, Student, MonthlyFee, ProductDebt, Payment, FinancialMovement, InternalNote } from '../../types/database';
-import { formatCurrency, formatDate, formatDateTime, getWhatsAppLink, isOverdue, calculateAge, formatReferenceDisplay } from '../../lib/utils';
+import { formatCurrency, formatDate, formatDateTime, getWhatsAppLink, isOverdue, calculateAge, formatReferenceDisplay, filterAdministrativeMovements } from '../../lib/utils';
 import { AddFeeModal } from './modals/AddFeeModal';
+import { EditFeeModal } from './modals/EditFeeModal';
 import { AddProductDebtModal } from './modals/AddProductDebtModal';
 import { RecordPaymentModal } from './modals/RecordPaymentModal';
 import { AdjustmentModal } from './modals/AdjustmentModal';
@@ -38,6 +39,7 @@ import {
   ShieldCheck,
   User,
   Eye,
+  Trash2,
 } from 'lucide-react';
 
 interface AdminStudentDetailProps {
@@ -67,9 +69,12 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
 
   // Modals state
   const [showAddFee, setShowAddFee] = useState(false);
+  const [editFeeItem, setEditFeeItem] = useState<MonthlyFee | null>(null);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showEditStudent, setShowEditStudent] = useState(false);
   const [revertPaymentItem, setRevertPaymentItem] = useState<Payment | null>(null);
+  const [deletePaymentItem, setDeletePaymentItem] = useState<Payment | null>(null);
+  const [deletingPayment, setDeletingPayment] = useState(false);
   const [cancelFeeItem, setCancelFeeItem] = useState<MonthlyFee | null>(null);
   const [cancelDebtItem, setCancelDebtItem] = useState<ProductDebt | null>(null);
 
@@ -141,7 +146,20 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
 
   useEffect(() => {
     loadAllStudentData();
-  }, [loadAllStudentData]);
+
+    const onFinancialUpdated = (e: any) => {
+      const detail = e?.detail;
+      const canonicalId = student?.id || studentId;
+      if (!detail?.studentId || detail.studentId === canonicalId || detail.studentId === studentId) {
+        loadAllStudentData();
+      }
+    };
+
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
+    return () => {
+      window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
+    };
+  }, [loadAllStudentData, studentId, student?.id]);
 
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +185,32 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
     }
   };
 
+  const handleDeletePayment = async () => {
+    if (!deletePaymentItem) return;
+    setDeletingPayment(true);
+    try {
+      const res = await dbService.deletePayment(deletePaymentItem.id);
+      success(res.message || 'Pagamento excluído com sucesso!');
+      setDeletePaymentItem(null);
+      await loadAllStudentData();
+    } catch (err: any) {
+      error(err?.message || 'Não foi possível excluir o pagamento.');
+    } finally {
+      setDeletingPayment(false);
+    }
+  };
+
   const studentDisplayName = student?.nickname || student?.full_name || 'Aluno';
+
+  const openFees = fees?.open || [];
+  const paidFees = fees?.paid || [];
+  const openDebts = debts?.open || [];
+  const paidDebts = debts?.paid || [];
+  const paymentsList = payments || [];
+  const historyList = useMemo(() => {
+    return filterAdministrativeMovements(history || []);
+  }, [history]);
+  const notesList = notes || [];
 
   if (loading && !student) {
     return (
@@ -198,14 +241,6 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
       </div>
     );
   }
-
-  const openFees = fees?.open || [];
-  const paidFees = fees?.paid || [];
-  const openDebts = debts?.open || [];
-  const paidDebts = debts?.paid || [];
-  const paymentsList = payments || [];
-  const historyList = history || [];
-  const notesList = notes || [];
 
   return (
     <div className="space-y-6">
@@ -252,12 +287,46 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
                     Cadastro Manual
                   </span>
                 )}
+                {summary?.financialStatus === 'SCHOLARSHIP' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-950 text-purple-300 border border-purple-500/40 flex items-center gap-1 shadow-sm">
+                    <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                    Bolsista (Isento)
+                  </span>
+                )}
+                {summary?.financialStatus === 'NO_MONTHLY_FEE' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neutral-800 text-neutral-300 border border-neutral-700">
+                    Sem mensalidade cadastrada
+                  </span>
+                )}
+                {summary?.financialStatus === 'UP_TO_DATE' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    Mensalidades em dia
+                  </span>
+                )}
+                {summary?.financialStatus === 'OVERDUE' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-500/40 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 text-rose-400" />
+                    Em atraso ({summary.overdueCount})
+                  </span>
+                )}
+                {summary?.financialStatus === 'PENDING' && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-950 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-400" />
+                    A vencer
+                  </span>
+                )}
               </div>
               <p className="text-xs text-neutral-400 mt-0.5">
                 Matrícula desde {formatDate(student?.created_at)} •{' '}
                 <span className={student?.active ? 'text-emerald-400 font-semibold' : 'text-rose-400'}>
                   {student?.active ? 'Ativo' : 'Inativo'}
                 </span>
+                {student?.due_day && (
+                  <span className="text-neutral-400 ml-2">
+                    • Vencimento base: <strong>Dia {student.due_day}</strong>
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -507,7 +576,12 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
               </div>
             ) : (
               openFees.map((fee) => {
-                const overdue = isOverdue(fee.due_date, fee.remaining_amount);
+                const isScholarshipFee = Boolean(
+                  fee.is_scholarship ||
+                  fee.status === 'scholarship' ||
+                  (fee.notes && fee.notes.includes('[BOLSISTA]'))
+                );
+                const overdue = !isScholarshipFee && isOverdue(fee.due_date, fee.remaining_amount);
                 return (
                   <div
                     key={fee.id}
@@ -518,7 +592,12 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
                         <h4 className="font-bold text-base text-neutral-100 uppercase">
                           {formatReferenceDisplay(fee.reference_month)}
                         </h4>
-                        {overdue ? (
+                        {isScholarshipFee ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-purple-950 text-purple-300 border border-purple-500/40 flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-purple-400" />
+                            Bolsista (Isento)
+                          </span>
+                        ) : overdue ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-950 text-rose-300 border border-rose-500/40">
                             Vencida ({formatDate(fee.due_date)})
                           </span>
@@ -539,6 +618,15 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        id={`btn-edit-fee-${fee.id}`}
+                        onClick={() => setEditFeeItem(fee)}
+                        className="p-2 text-neutral-400 hover:text-amber-400 bg-[#1e2025] hover:bg-amber-950/30 rounded-xl border border-neutral-800 hover:border-amber-500/40 transition"
+                        title="Editar Mensalidade (Valor, Vencimento, Status)"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+
                       {Number(fee.amount_paid) === 0 && (
                         <button
                           id={`btn-cancel-fee-${fee.id}`}
@@ -609,9 +697,18 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
                       Quitada em {formatDate(fee.paid_at || fee.updated_at)}
                     </span>
                   </div>
-                  <span className="font-mono font-bold text-emerald-400">
-                    {formatCurrency(fee.amount)}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-bold text-emerald-400">
+                      {formatCurrency(fee.amount)}
+                    </span>
+                    <button
+                      onClick={() => setEditFeeItem(fee)}
+                      className="p-1.5 text-neutral-400 hover:text-amber-400 bg-[#1e2025] hover:bg-amber-950/30 rounded-lg border border-neutral-800 hover:border-amber-500/40 transition"
+                      title="Editar Mensalidade"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -801,17 +898,29 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
                       </span>
                     </div>
 
-                    {!isReversed && (
+                    <div className="flex items-center gap-2">
+                      {!isReversed && (
+                        <button
+                          id={`btn-revert-payment-${p.id}`}
+                          onClick={() => setRevertPaymentItem(p)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e2025] hover:bg-amber-950/40 text-neutral-300 hover:text-amber-300 border border-[#2d3038] hover:border-amber-500/40 text-xs font-semibold rounded-xl transition cursor-pointer"
+                          title="Reverter este pagamento"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Reverter</span>
+                        </button>
+                      )}
+
                       <button
-                        id={`btn-revert-payment-${p.id}`}
-                        onClick={() => setRevertPaymentItem(p)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e2025] hover:bg-rose-950/40 text-neutral-300 hover:text-rose-300 border border-[#2d3038] hover:border-rose-500/40 text-xs font-semibold rounded-xl transition"
-                        title="Reverter este pagamento"
+                        id={`btn-delete-payment-${p.id}`}
+                        onClick={() => setDeletePaymentItem(p)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold rounded-xl transition cursor-pointer"
+                        title="Excluir este pagamento permanentemente"
                       >
-                        <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Reverter</span>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Excluir</span>
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               );
@@ -945,6 +1054,18 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
         onClose={() => setShowAddFee(false)}
         studentId={student?.id || studentId}
         studentName={studentDisplayName}
+        defaultAmount={Number(student?.monthly_fee_amount) || undefined}
+        defaultDueDay={Number(student?.due_day) || undefined}
+        isScholarshipDefault={Boolean(student?.is_scholarship)}
+        onSuccess={loadAllStudentData}
+      />
+
+      <EditFeeModal
+        isOpen={Boolean(editFeeItem)}
+        onClose={() => setEditFeeItem(null)}
+        fee={editFeeItem}
+        studentId={student?.id || studentId}
+        studentName={studentDisplayName}
         onSuccess={loadAllStudentData}
       />
 
@@ -991,6 +1112,74 @@ export function AdminStudentDetail({ studentId }: AdminStudentDetailProps) {
           studentName={studentDisplayName}
           onSuccess={loadAllStudentData}
         />
+      )}
+
+      {/* Exclusão Definitiva de Pagamento */}
+      {deletePaymentItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="bg-[#141619] border border-rose-500/40 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white">Excluir Pagamento</h3>
+                <p className="text-xs text-neutral-400">Remover lançamento incorreto</p>
+              </div>
+            </div>
+
+            <div className="bg-[#181a1f] border border-neutral-800 rounded-xl p-3.5 text-xs text-neutral-300 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Aluno:</span>
+                <strong className="text-white">{studentDisplayName}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Tipo:</span>
+                <strong className="text-neutral-200">
+                  {deletePaymentItem.payment_type === 'monthly_fee' ? 'Mensalidade' : 'Produto'}
+                </strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-400">Valor:</span>
+                <strong className="text-emerald-400 font-mono">
+                  {formatCurrency(deletePaymentItem.amount)}
+                </strong>
+              </div>
+              <p className="text-[11px] text-amber-300/90 pt-2 border-t border-neutral-800">
+                Ao confirmar, este pagamento será excluído e a mensalidade/produto vinculado e o Dashboard serão atualizados automaticamente.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletePaymentItem(null)}
+                disabled={deletingPayment}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePayment}
+                disabled={deletingPayment}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition flex items-center gap-2 shadow-lg shadow-rose-950/50 cursor-pointer disabled:opacity-50"
+              >
+                {deletingPayment ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Excluindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirmar Exclusão</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Cancelamento de Mensalidade */}

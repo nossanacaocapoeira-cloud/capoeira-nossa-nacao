@@ -35,6 +35,14 @@ export function StudentProducts() {
 
   useEffect(() => {
     loadDebts();
+    const onFinancialUpdated = () => loadDebts();
+    const onFocus = () => loadDebts();
+    window.addEventListener('capoeira:financial_updated', onFinancialUpdated);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('capoeira:financial_updated', onFinancialUpdated);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [loadDebts]);
 
   return (
