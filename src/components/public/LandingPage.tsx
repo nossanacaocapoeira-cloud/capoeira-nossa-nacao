@@ -11,33 +11,17 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#090a0d] text-neutral-100 flex flex-col justify-between relative overflow-hidden selection:bg-amber-500 selection:text-black">
-      {/* Ambient Lighting & 3D Mesh Atmosphere */}
-      <div className="absolute inset-0 bg-ambient-radial pointer-events-none" />
-      <div className="absolute inset-0 bg-subtle-grid pointer-events-none opacity-30" />
+      {/* Hero Background Image (Apache) */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none bg-[image:url('/assets/Apache.png'),url('/Apache.png')] bg-cover bg-no-repeat bg-[position:50%_18%] sm:bg-[position:50%_22%] lg:bg-[position:50%_24%]"
+      />
 
-      {/* Volumetric light spheres */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-amber-500/10 rounded-full blur-[140px] pointer-events-none animate-aura-pulse" />
-      <div className="absolute bottom-10 -left-20 w-80 h-80 bg-amber-600/5 rounded-full blur-[100px] pointer-events-none" />
-
-      {/* Motion curves representing roda de capoeira energy */}
-      <svg
-        className="absolute inset-0 w-full h-full pointer-events-none opacity-25"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M -200,300 Q 200,100 800,400 T 1600,200"
-          fill="none"
-          stroke="rgba(245, 158, 11, 0.15)"
-          strokeWidth="1.5"
-          strokeDasharray="6 6"
-        />
-        <path
-          d="M -100,500 Q 400,200 900,600 T 1700,450"
-          fill="none"
-          stroke="rgba(245, 158, 11, 0.08)"
-          strokeWidth="1"
-        />
-      </svg>
+      {/* Camada de Overlay Escura (~0.60) para contraste cinematográfico e leitura perfeita */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none bg-[linear-gradient(to_bottom,rgba(0,0,0,0.62)_0%,rgba(0,0,0,0.56)_35%,rgba(0,0,0,0.64)_70%,rgba(0,0,0,0.72)_100%)]"
+      />
 
       {/* Top Bar Header */}
       <header className="relative z-10 px-6 py-5 border-b border-white/[0.06] backdrop-blur-md bg-[#090a0d]/60">
@@ -81,20 +65,14 @@ export function LandingPage() {
       <main className="relative z-10 flex-1 flex items-center justify-center px-6 py-16 sm:py-24 max-w-4xl mx-auto w-full">
         <div className="w-full text-center space-y-10">
           {/* Subtle floating 3D badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-xs font-mono text-amber-300 font-semibold shadow-lg shadow-amber-950/20 backdrop-blur-sm">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-black/45 border border-amber-500/30 text-xs font-mono text-amber-300 font-semibold shadow-lg shadow-black/40 backdrop-blur-sm">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>Portal Oficial dos Alunos</span>
           </div>
 
           {/* Heading & Subtitle */}
           <div className="space-y-5 max-w-3xl mx-auto">
-            <h2 className="text-4xl sm:text-6xl font-black tracking-tight text-neutral-100 font-display leading-[1.15]">
-              A FORÇA E A ENERGIA DA <br />
-              <span className="bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 bg-clip-text text-transparent drop-shadow-sm">
-                CAPOEIRA NOSSA NAÇÃO
-              </span>
-            </h2>
-            <p className="text-sm sm:text-base text-neutral-300 max-w-xl mx-auto leading-relaxed font-normal">
+            <p className="text-sm sm:text-base text-neutral-200 max-w-xl mx-auto leading-relaxed font-normal drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
               Acompanhe suas mensalidades, materiais, graduações e histórico financeiro com total transparência e praticidade em uma experiência premium.
             </p>
           </div>
