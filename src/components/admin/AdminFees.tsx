@@ -26,12 +26,17 @@ import {
   X,
   AlertTriangle,
   Info,
+  LayoutGrid,
+  Table as TableIcon,
 } from 'lucide-react';
 
 export function AdminFees() {
   const { navigate } = useNavigation();
   const { user } = useAuth();
   const { success, error: toastError } = useToast();
+
+  // Modo de visualização no mobile: 'cards' (padrão) ou 'table'
+  const [mobileViewMode, setMobileViewMode] = useState<'cards' | 'table'>('cards');
 
   // Ano atual em São Paulo como padrão
   const currentSpDate = useMemo(() => getSaoPauloDate(), []);
@@ -378,17 +383,18 @@ export function AdminFees() {
           <button
             id="btn-reset-financial-data"
             onClick={() => setShowResetModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-rose-400 hover:text-rose-300 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/30 hover:border-rose-500/50 rounded-xl transition text-xs font-bold cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-rose-400 hover:text-rose-300 bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/30 hover:border-rose-500/50 rounded-xl transition text-xs font-bold cursor-pointer"
             title="Limpar lançamentos financeiros de teste e reiniciar do zero"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Financeiro</span>
+            <span className="hidden sm:inline">Reset Financeiro</span>
+            <span className="sm:hidden">Reset</span>
           </button>
 
           {/* Botão Gerar Mensalidades do Mês */}
           <button
             onClick={() => setShowBatchModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-bold rounded-xl border border-neutral-700 transition"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white text-xs font-bold rounded-xl border border-neutral-700 transition"
             title="Gerar mensalidades recorrentes do mês"
           >
             <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -398,9 +404,9 @@ export function AdminFees() {
       </div>
 
       {/* Barra de Ações & Barra de Busca */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sticky top-0 z-30 bg-[#0e1013]/95 backdrop-blur-md p-2.5 rounded-2xl border border-[#25282f] shadow-lg">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sticky top-0 z-30 bg-[#0e1013]/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-[#25282f] shadow-lg">
         {/* Campo de Busca */}
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 max-w-md w-full">
           <input
             id="input-search-student-grid"
             type="text"
@@ -421,23 +427,23 @@ export function AdminFees() {
         </div>
 
         {/* Seção de Lançamento / Contador de Alterações */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-between lg:justify-end">
           {pendingChanges.size > 0 && (
-            <>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold animate-pulse">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                <span>{pendingChanges.size} alteraç{pendingChanges.size === 1 ? 'ão pendente' : 'ões pendentes'}</span>
+                <span>{pendingChanges.size} pendência{pendingChanges.size === 1 ? '' : 's'}</span>
               </div>
 
               <button
                 onClick={handleDiscardChanges}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-rose-400 bg-[#141619] border border-[#25282f] hover:border-rose-500/30 transition"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-neutral-400 hover:text-rose-400 bg-[#141619] border border-[#25282f] hover:border-rose-500/30 transition"
                 title="Descartar todas as alterações não salvas"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Descartar</span>
+                <span className="hidden sm:inline">Descartar</span>
               </button>
-            </>
+            </div>
           )}
 
           {/* Botão LANÇAR ALTERAÇÕES */}
@@ -445,15 +451,48 @@ export function AdminFees() {
             id="btn-launch-grid-changes"
             disabled={pendingChanges.size === 0 || savingBatch}
             onClick={() => setShowConfirmModal(true)}
-            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black transition shadow-lg ${
+            className={`flex items-center justify-center gap-2 px-4 sm:px-5 py-2 rounded-xl text-xs font-black transition shadow-lg flex-1 sm:flex-none ${
               pendingChanges.size > 0
                 ? 'bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-amber-500/20 cursor-pointer active:scale-95'
                 : 'bg-neutral-800 text-neutral-500 border border-neutral-700/50 cursor-not-allowed opacity-60'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4" />
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>LANÇAR ALTERAÇÕES</span>
           </button>
+        </div>
+
+        {/* Alternador de Visualização no Mobile */}
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#25282f]/70 lg:hidden w-full">
+          <span className="text-[11px] font-mono text-neutral-400 font-bold uppercase">
+            Visualização:
+          </span>
+          <div className="flex items-center bg-[#141619] border border-[#25282f] p-0.5 rounded-xl text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setMobileViewMode('cards')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+                mobileViewMode === 'cards'
+                  ? 'bg-amber-500 text-neutral-950 shadow font-black'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cartões</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileViewMode('table')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+                mobileViewMode === 'table'
+                  ? 'bg-amber-500 text-neutral-950 shadow font-black'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Tabela</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -475,253 +514,451 @@ export function AdminFees() {
           </p>
         </div>
       ) : (
-        <div className="relative border border-[#25282f] rounded-2xl bg-[#141619] shadow-2xl overflow-hidden">
-          {/* Tabela ampla e legível sem necessidade de rolagem horizontal */}
-          <div className="overflow-x-hidden max-h-[80vh] overflow-y-auto">
-            <table className="w-full table-fixed text-left border-collapse">
-              {/* Cabeçalho da Tabela */}
-              <thead className="bg-[#0c0d0f] sticky top-0 z-20 border-b border-[#25282f]">
-                <tr>
-                  {/* Coluna Aluno */}
-                  <th className="py-3 px-3 text-xs font-mono font-extrabold uppercase tracking-wider text-neutral-200 w-[180px] lg:w-[205px] border-r border-[#25282f]">
-                    Aluno
-                  </th>
+        <>
+          {/* VISÃO 1: CARTÕES (Padrão no Mobile - 100% responsivo, sem cortes e com toque fácil) */}
+          <div className={`${mobileViewMode === 'cards' ? 'block lg:hidden' : 'hidden'} space-y-3.5`}>
+            {filteredRows.map((row) => {
+              const s = row.student;
+              const isScholarship = Boolean(s.is_scholarship || s.isScholarship);
+              const configuredFee = isScholarship ? 0 : (Number(s.monthly_fee_amount) || 0);
+              const configuredDueDay = Number(s.due_day) || 10;
 
-                  {/* Coluna Ações */}
-                  <th className="py-3 px-1.5 text-xs font-mono font-extrabold uppercase tracking-wider text-neutral-200 text-center w-[62px] border-r border-[#25282f]">
-                    Ações
-                  </th>
-
-                  {/* Colunas dos Meses (JAN a DEZ) */}
-                  {[
-                    { m: 1, label: 'JAN' },
-                    { m: 2, label: 'FEV' },
-                    { m: 3, label: 'MAR' },
-                    { m: 4, label: 'ABR' },
-                    { m: 5, label: 'MAI' },
-                    { m: 6, label: 'JUN' },
-                    { m: 7, label: 'JUL' },
-                    { m: 8, label: 'AGO' },
-                    { m: 9, label: 'SET' },
-                    { m: 10, label: 'OUT' },
-                    { m: 11, label: 'NOV' },
-                    { m: 12, label: 'DEZ' },
-                  ].map(({ m, label }) => {
-                    const isCurrent =
-                      selectedYear === currentSpDate.year && m === currentSpDate.month;
-                    return (
-                      <th
-                        key={label}
-                        className={`py-2.5 px-1 text-center text-xs font-mono font-extrabold tracking-tight transition ${
-                          isCurrent
-                            ? 'bg-amber-500/15 text-amber-400 border-b-2 border-b-amber-500'
-                            : 'text-neutral-300 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex flex-col items-center leading-tight">
-                          <span>{label}</span>
-                          {isCurrent && (
-                            <span className="text-[9px] font-sans font-bold text-amber-400 -mt-0.5">
-                              Atual
-                            </span>
-                          )}
-                        </div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-
-              {/* Corpo da Tabela (Alunos em ordem alfabética) */}
-              <tbody className="divide-y divide-[#1f2228] text-xs">
-                {filteredRows.map((row) => {
-                  const s = row.student;
-                  return (
-                    <tr
-                      key={s.id}
-                      className="hover:bg-neutral-800/40 transition-colors group"
-                    >
-                      {/* Célula do Aluno */}
-                      <td className="bg-[#141619] group-hover:bg-[#1a1d22] py-2 px-3 border-r border-[#25282f] transition-colors">
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-xs sm:text-[13px] leading-snug text-neutral-100 truncate" title={s.full_name}>
-                            {s.full_name}
+              return (
+                <div
+                  key={`card-${s.id}`}
+                  className="p-4 rounded-2xl bg-[#141619] border border-[#25282f] shadow-xl space-y-3 transition hover:border-[#353942]"
+                >
+                  {/* Cabeçalho do Aluno no Cartão */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-sm text-neutral-100 truncate" title={s.full_name}>
+                          {s.full_name}
+                        </span>
+                        {s.nickname && (
+                          <span className="text-xs text-amber-400 font-semibold truncate">
+                            "{s.nickname}"
                           </span>
-                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                            {s.nickname ? (
-                              <span className="text-[11px] leading-tight text-amber-400 font-semibold truncate">
-                                "{s.nickname}"
-                              </span>
-                            ) : null}
-                            {s.is_scholarship && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
-                                BOLSISTA
-                              </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {isScholarship ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+                            BOLSISTA
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-mono text-neutral-400">
+                            Valor:{' '}
+                            <strong className="text-amber-300 font-bold">{formatCurrency(configuredFee)}</strong>
+                            <span className="text-neutral-500 text-[10px] ml-1">(Dia {configuredDueDay})</span>
+                          </span>
+                        )}
+                        {!s.active && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                            INATIVO
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStudentForActions(s)}
+                      className="px-3 py-1.5 text-xs font-bold rounded-xl bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200 border border-neutral-700 hover:border-amber-400 transition cursor-pointer shrink-0 active:scale-95 shadow-sm"
+                    >
+                      Ações
+                    </button>
+                  </div>
+
+                  {/* Grade de 12 Meses do Aluno (4 colunas x 3 linhas em smartphones / 6 colunas em tablets) */}
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 pt-2 border-t border-[#1f2228]">
+                    {row.months.map((cell) => {
+                      const key = `${s.id}_${cell.referenceMonth}`;
+                      const pendingChange = pendingChanges.get(key);
+                      const isPending = Boolean(pendingChange);
+
+                      let visualStatus: GridFeeStatus = cell.status;
+                      if (pendingChange) {
+                        visualStatus = pendingChange.targetStatus;
+                      }
+
+                      const monthNum = parseInt(cell.referenceMonth.split('-')[1] || '0', 10);
+                      const isCurrent = selectedYear === currentSpDate.year && monthNum === currentSpDate.month;
+
+                      let cellClass = '';
+                      let labelText: string = visualStatus;
+
+                      if (visualStatus === 'PRE' || visualStatus === 'PRÉ') {
+                        cellClass = 'bg-[#181a1f] text-neutral-600 border-neutral-800/80 cursor-not-allowed select-none opacity-50';
+                        labelText = 'PRÉ';
+                      } else if (visualStatus === 'PAGO') {
+                        cellClass = 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border-emerald-500/50 cursor-pointer active:scale-95';
+                        labelText = 'PAGO';
+                      } else if (visualStatus === 'ATRASO') {
+                        cellClass = 'bg-rose-500/25 hover:bg-rose-500/35 text-rose-300 border-rose-500/50 cursor-pointer active:scale-95';
+                        labelText = 'ATRASO';
+                      } else if (visualStatus === 'NÃO PAGO') {
+                        cellClass = 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 cursor-pointer active:scale-95';
+                        labelText = 'NÃO PAGO';
+                      } else if (visualStatus === 'PARCIAL') {
+                        cellClass = 'bg-sky-500/25 text-sky-200 border-sky-500/50 cursor-pointer hover:bg-sky-500/35';
+                        labelText = 'PARCIAL';
+                      } else if (visualStatus === 'BOLSISTA') {
+                        cellClass = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 cursor-not-allowed select-none';
+                        labelText = 'BOLSISTA';
+                      } else if (visualStatus === 'SEM MENSALIDADE') {
+                        cellClass = 'bg-neutral-800/50 hover:bg-neutral-700/60 text-neutral-300 border-neutral-700/60 cursor-pointer active:scale-95';
+                        labelText = 'SEM MENS.';
+                      }
+
+                      return (
+                        <button
+                          key={cell.referenceMonth}
+                          type="button"
+                          onClick={() => handleCellClick(s, cell)}
+                          disabled={cell.isScholarship || cell.isPre || visualStatus === 'PRE' || visualStatus === 'PRÉ'}
+                          className={`relative min-h-[48px] py-1 px-1 rounded-xl border transition-all flex flex-col items-center justify-center text-center ${cellClass} ${
+                            isPending ? 'ring-2 ring-amber-400 shadow-md scale-[1.02]' : ''
+                          } ${isCurrent ? 'ring-1 ring-amber-500/50' : ''}`}
+                          title={`${cell.monthLabel}: ${visualStatus}`}
+                        >
+                          {/* Linha superior: Rótulo do Mês */}
+                          <div className="flex items-center gap-1 leading-none mb-0.5">
+                            <span className={`text-[10.5px] font-mono font-extrabold ${isCurrent ? 'text-amber-400' : 'text-neutral-400'}`}>
+                              {cell.monthLabel}
+                            </span>
+                            {isCurrent && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" title="Mês Atual" />
                             )}
-                            {!s.active && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
-                                INATIVO
+                          </div>
+
+                          {/* Linha inferior: Status */}
+                          <span className="text-[9.5px] font-black leading-tight tracking-tight uppercase">
+                            {labelText}
+                          </span>
+
+                          {/* Indicador de Alteração Não Salva */}
+                          {isPending && (
+                            <>
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-[#141619] rounded-full animate-ping" />
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-[#141619] rounded-full" />
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Legenda de Status no Rodapé dos Cartões */}
+            <div className="p-3.5 bg-[#141619] border border-[#25282f] rounded-2xl space-y-2 text-xs">
+              <span className="text-[11px] font-mono font-bold uppercase text-neutral-400 block">
+                Legenda de Cores:
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500/50 inline-block shrink-0" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">PAGO (Quitado)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-amber-500/30 border border-amber-500/50 inline-block shrink-0" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">NÃO PAGO (A vencer)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-rose-500/30 border border-rose-500/50 inline-block shrink-0" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">ATRASO (Vencido)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-[#181a1f] border border-neutral-700 inline-block shrink-0" />
+                  <span className="text-neutral-400 text-[11px]">PRÉ (Antes da matrícula)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-sky-500/30 border border-sky-500/50 inline-block shrink-0" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">PARCIAL</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-indigo-500/30 border border-indigo-500/50 inline-block shrink-0" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">BOLSISTA</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* VISÃO 2: TABELA (Padrão no Desktop, acessível via toggle no Mobile com rolagem fluida e coluna fixa) */}
+          <div className={`${mobileViewMode === 'table' ? 'block' : 'hidden lg:block'} relative border border-[#25282f] rounded-2xl bg-[#141619] shadow-2xl overflow-hidden`}>
+            {/* Tabela com rolagem horizontal permitida no mobile e 100% compacta no desktop */}
+            <div className="overflow-x-auto lg:overflow-x-hidden max-h-[80vh] overflow-y-auto">
+              <table className="w-full min-w-[860px] lg:min-w-0 table-fixed text-left border-collapse">
+                {/* Cabeçalho da Tabela */}
+                <thead className="bg-[#0c0d0f] sticky top-0 z-20 border-b border-[#25282f]">
+                  <tr>
+                    {/* Coluna Aluno com Sticky Left para navegação perfeita no mobile */}
+                    <th className="py-3 px-3 text-xs font-mono font-extrabold uppercase tracking-wider text-neutral-200 w-[180px] lg:w-[205px] border-r border-[#25282f] sticky left-0 z-30 bg-[#0c0d0f] shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
+                      Aluno
+                    </th>
+
+                    {/* Coluna Ações */}
+                    <th className="py-3 px-1.5 text-xs font-mono font-extrabold uppercase tracking-wider text-neutral-200 text-center w-[62px] border-r border-[#25282f]">
+                      Ações
+                    </th>
+
+                    {/* Colunas dos Meses (JAN a DEZ) */}
+                    {[
+                      { m: 1, label: 'JAN' },
+                      { m: 2, label: 'FEV' },
+                      { m: 3, label: 'MAR' },
+                      { m: 4, label: 'ABR' },
+                      { m: 5, label: 'MAI' },
+                      { m: 6, label: 'JUN' },
+                      { m: 7, label: 'JUL' },
+                      { m: 8, label: 'AGO' },
+                      { m: 9, label: 'SET' },
+                      { m: 10, label: 'OUT' },
+                      { m: 11, label: 'NOV' },
+                      { m: 12, label: 'DEZ' },
+                    ].map(({ m, label }) => {
+                      const isCurrent =
+                        selectedYear === currentSpDate.year && m === currentSpDate.month;
+                      return (
+                        <th
+                          key={label}
+                          className={`py-2.5 px-1 text-center text-xs font-mono font-extrabold tracking-tight transition ${
+                            isCurrent
+                              ? 'bg-amber-500/15 text-amber-400 border-b-2 border-b-amber-500'
+                              : 'text-neutral-300 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex flex-col items-center leading-tight">
+                            <span>{label}</span>
+                            {isCurrent && (
+                              <span className="text-[9px] font-sans font-bold text-amber-400 -mt-0.5">
+                                Atual
                               </span>
                             )}
                           </div>
-                        </div>
-                      </td>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
 
-                      {/* Célula de Ações */}
-                      <td className="bg-[#141619] group-hover:bg-[#1a1d22] py-2 px-1.5 text-center border-r border-[#25282f] transition-colors">
-                        <button
-                          onClick={() => setSelectedStudentForActions(s)}
-                          className="px-2 py-1.5 text-[11px] font-bold rounded-lg bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200 border border-neutral-700 hover:border-amber-400 transition w-full cursor-pointer"
-                          title="Abrir dados cadastrais e configuração financeira"
-                        >
-                          Ações
-                        </button>
-                      </td>
+                {/* Corpo da Tabela (Alunos em ordem alfabética) */}
+                <tbody className="divide-y divide-[#1f2228] text-xs">
+                  {filteredRows.map((row) => {
+                    const s = row.student;
+                    return (
+                      <tr
+                        key={s.id}
+                        className="hover:bg-neutral-800/40 transition-colors group"
+                      >
+                        {/* Célula do Aluno com Sticky Left */}
+                        <td className="bg-[#141619] group-hover:bg-[#1a1d22] py-2 px-3 border-r border-[#25282f] transition-colors sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-xs sm:text-[13px] leading-snug text-neutral-100 truncate" title={s.full_name}>
+                              {s.full_name}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                              {s.nickname ? (
+                                <span className="text-[11px] leading-tight text-amber-400 font-semibold truncate">
+                                  "{s.nickname}"
+                                </span>
+                              ) : null}
+                              {s.is_scholarship && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+                                  BOLSISTA
+                                </span>
+                              )}
+                              {!s.active && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                                  INATIVO
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
 
-                      {/* Células dos Meses (JAN a DEZ) */}
-                      {row.months.map((cell) => {
-                        const key = `${s.id}_${cell.referenceMonth}`;
-                        const pendingChange = pendingChanges.get(key);
-                        const isPending = Boolean(pendingChange);
+                        {/* Célula de Ações */}
+                        <td className="bg-[#141619] group-hover:bg-[#1a1d22] py-2 px-1.5 text-center border-r border-[#25282f] transition-colors">
+                          <button
+                            onClick={() => setSelectedStudentForActions(s)}
+                            className="px-2 py-1.5 text-[11px] font-bold rounded-lg bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200 border border-neutral-700 hover:border-amber-400 transition w-full cursor-pointer"
+                            title="Abrir dados cadastrais e configuração financeira"
+                          >
+                            Ações
+                          </button>
+                        </td>
 
-                        // Status visual atual
-                        let visualStatus: GridFeeStatus = cell.status;
-                        if (pendingChange) {
-                          visualStatus = pendingChange.targetStatus;
-                        }
+                        {/* Células dos Meses (JAN a DEZ) */}
+                        {row.months.map((cell) => {
+                          const key = `${s.id}_${cell.referenceMonth}`;
+                          const pendingChange = pendingChanges.get(key);
+                          const isPending = Boolean(pendingChange);
 
-                        // Estilização conforme regras estritas
-                        let cellClass = '';
-                        let labelText: string = visualStatus;
+                          // Status visual atual
+                          let visualStatus: GridFeeStatus = cell.status;
+                          if (pendingChange) {
+                            visualStatus = pendingChange.targetStatus;
+                          }
 
-                        if (visualStatus === 'PRE' || visualStatus === 'PRÉ') {
-                          // PRÉ: cinza neutro, bloqueado
-                          cellClass = 'bg-[#181a1f] text-neutral-600 border-neutral-800/80 cursor-not-allowed select-none opacity-50';
-                          labelText = 'PRÉ';
-                        } else if (visualStatus === 'PAGO') {
-                          // PAGO: verde
-                          cellClass = 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border-emerald-500/50 cursor-pointer active:scale-95';
-                          labelText = 'PAGO';
-                        } else if (visualStatus === 'ATRASO') {
-                          // ATRASO: vermelho
-                          cellClass = 'bg-rose-500/25 hover:bg-rose-500/35 text-rose-300 border-rose-500/50 cursor-pointer active:scale-95';
-                          labelText = 'ATRASO';
-                        } else if (visualStatus === 'NÃO PAGO') {
-                          // NÃO PAGO: laranja/âmbar
-                          cellClass = 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 cursor-pointer active:scale-95';
-                          labelText = 'NÃO PAGO';
-                        } else if (visualStatus === 'PARCIAL') {
-                          // PARCIAL: azul
-                          cellClass = 'bg-sky-500/25 text-sky-200 border-sky-500/50 cursor-pointer hover:bg-sky-500/35';
-                          labelText = 'PARCIAL';
-                        } else if (visualStatus === 'BOLSISTA') {
-                          // BOLSISTA: índigo
-                          cellClass = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 cursor-not-allowed select-none';
-                          labelText = 'BOLSISTA';
-                        } else if (visualStatus === 'SEM MENSALIDADE') {
-                          // SEM MENSALIDADE: cinza neutro sutil, clicável para lançar pagamento
-                          cellClass = 'bg-neutral-800/45 hover:bg-neutral-700/60 text-neutral-300 border-neutral-700/60 cursor-pointer active:scale-95';
-                          labelText = 'SEM MENSALIDADE';
-                        }
+                          // Estilização conforme regras estritas
+                          let cellClass = '';
+                          let labelText: string = visualStatus;
 
-                        return (
-                          <td key={cell.referenceMonth} className="p-1 text-center align-middle">
-                            <button
-                              type="button"
-                              onClick={() => handleCellClick(s, cell)}
-                              disabled={cell.isScholarship || cell.isPre || visualStatus === 'PRE' || visualStatus === 'PRÉ'}
-                              className={`relative w-full min-h-[36px] py-1.5 px-1 text-[10px] sm:text-[10.5px] leading-[1.05] tracking-tight font-black rounded-lg border transition-all flex items-center justify-center text-center ${cellClass} ${
-                                isPending ? 'ring-2 ring-amber-400 shadow-md scale-[1.02]' : ''
-                              }`}
-                              title={
-                                visualStatus === 'PRE' || visualStatus === 'PRÉ'
-                                  ? 'Aluno ainda não estava matriculado neste período'
-                                  : visualStatus === 'BOLSISTA'
-                                  ? 'Aluno bolsista (isento de mensalidade)'
-                                  : visualStatus === 'SEM MENSALIDADE'
-                                  ? `Sem mensalidade lançada para este mês (${formatCurrency(Number(s.monthly_fee_amount) || 0)} configurado). Clique para lançar como PAGO`
-                                  : visualStatus === 'PARCIAL'
-                                  ? `Pago: ${formatCurrency(cell.amountPaid)} / Restante: ${formatCurrency(cell.remainingAmount)}`
-                                  : visualStatus === 'PAGO'
-                                  ? `Mensalidade PAGA (${formatCurrency(cell.amount || Number(s.monthly_fee_amount) || 0)}). Clique para reverter para SEM MENSALIDADE`
-                                  : `Mensalidade NÃO PAGA. Clique para alternar`
-                              }
-                            >
-                              <span className="block w-full">
-                                {visualStatus === 'SEM MENSALIDADE' ? (
-                                  <span className="flex flex-col items-center leading-[1.05]">
-                                    <span className="text-[9.5px] sm:text-[10px] font-black">SEM</span>
-                                    <span className="text-[8px] sm:text-[8.5px] font-extrabold opacity-90">MENSAL.</span>
-                                  </span>
-                                ) : visualStatus === 'NÃO PAGO' ? (
-                                  <span className="flex flex-col items-center leading-[1.05]">
-                                    <span className="text-[9.5px] sm:text-[10px] font-black">NÃO</span>
-                                    <span className="text-[9px] sm:text-[9.5px] font-black">PAGO</span>
-                                  </span>
-                                ) : (
-                                  labelText
+                          if (visualStatus === 'PRE' || visualStatus === 'PRÉ') {
+                            cellClass = 'bg-[#181a1f] text-neutral-600 border-neutral-800/80 cursor-not-allowed select-none opacity-50';
+                            labelText = 'PRÉ';
+                          } else if (visualStatus === 'PAGO') {
+                            cellClass = 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border-emerald-500/50 cursor-pointer active:scale-95';
+                            labelText = 'PAGO';
+                          } else if (visualStatus === 'ATRASO') {
+                            cellClass = 'bg-rose-500/25 hover:bg-rose-500/35 text-rose-300 border-rose-500/50 cursor-pointer active:scale-95';
+                            labelText = 'ATRASO';
+                          } else if (visualStatus === 'NÃO PAGO') {
+                            cellClass = 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 cursor-pointer active:scale-95';
+                            labelText = 'NÃO PAGO';
+                          } else if (visualStatus === 'PARCIAL') {
+                            cellClass = 'bg-sky-500/25 text-sky-200 border-sky-500/50 cursor-pointer hover:bg-sky-500/35';
+                            labelText = 'PARCIAL';
+                          } else if (visualStatus === 'BOLSISTA') {
+                            cellClass = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 cursor-not-allowed select-none';
+                            labelText = 'BOLSISTA';
+                          } else if (visualStatus === 'SEM MENSALIDADE') {
+                            cellClass = 'bg-neutral-800/45 hover:bg-neutral-700/60 text-neutral-300 border-neutral-700/60 cursor-pointer active:scale-95';
+                            labelText = 'SEM MENSALIDADE';
+                          }
+
+                          return (
+                            <td key={cell.referenceMonth} className="p-1 text-center align-middle">
+                              <button
+                                type="button"
+                                onClick={() => handleCellClick(s, cell)}
+                                disabled={cell.isScholarship || cell.isPre || visualStatus === 'PRE' || visualStatus === 'PRÉ'}
+                                className={`relative w-full min-h-[36px] py-1.5 px-1 text-[10px] sm:text-[10.5px] leading-[1.05] tracking-tight font-black rounded-lg border transition-all flex items-center justify-center text-center ${cellClass} ${
+                                  isPending ? 'ring-2 ring-amber-400 shadow-md scale-[1.02]' : ''
+                                }`}
+                                title={
+                                  visualStatus === 'PRE' || visualStatus === 'PRÉ'
+                                    ? 'Aluno ainda não estava matriculado neste período'
+                                    : visualStatus === 'BOLSISTA'
+                                    ? 'Aluno bolsista (isento de mensalidade)'
+                                    : visualStatus === 'SEM MENSALIDADE'
+                                    ? `Sem mensalidade lançada para este mês (${formatCurrency(Number(s.monthly_fee_amount) || 0)} configurado). Clique para lançar como PAGO`
+                                    : visualStatus === 'PARCIAL'
+                                    ? `Pago: ${formatCurrency(cell.amountPaid)} / Restante: ${formatCurrency(cell.remainingAmount)}`
+                                    : visualStatus === 'PAGO'
+                                    ? `Mensalidade PAGA (${formatCurrency(cell.amount || Number(s.monthly_fee_amount) || 0)}). Clique para reverter para SEM MENSALIDADE`
+                                    : `Mensalidade NÃO PAGA. Clique para alternar`
+                                }
+                              >
+                                <span className="block w-full">
+                                  {visualStatus === 'SEM MENSALIDADE' ? (
+                                    <span className="flex flex-col items-center leading-[1.05]">
+                                      <span className="text-[9.5px] sm:text-[10px] font-black">SEM</span>
+                                      <span className="text-[8px] sm:text-[8.5px] font-extrabold opacity-90">MENSAL.</span>
+                                    </span>
+                                  ) : visualStatus === 'NÃO PAGO' ? (
+                                    <span className="flex flex-col items-center leading-[1.05]">
+                                      <span className="text-[9.5px] sm:text-[10px] font-black">NÃO</span>
+                                      <span className="text-[9px] sm:text-[9.5px] font-black">PAGO</span>
+                                    </span>
+                                  ) : (
+                                    labelText
+                                  )}
+                                </span>
+
+                                {/* Indicador de Alteração Não Salva */}
+                                {isPending && (
+                                  <>
+                                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-[#141619] rounded-full animate-ping" />
+                                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-[#141619] rounded-full" />
+                                  </>
                                 )}
-                              </span>
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-                              {/* Indicador de Alteração Não Salva */}
-                              {isPending && (
-                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-[#141619] rounded-full animate-ping" />
-                              )}
-                              {isPending && (
-                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 border-2 border-[#141619] rounded-full" />
-                              )}
-                            </button>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {/* Legenda de Status no Rodapé da Tabela */}
+            <div className="p-3 bg-[#0c0d0f] border-t border-[#25282f] flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="text-[11px] font-mono font-bold uppercase text-neutral-400">
+                  Legenda:
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500/50 inline-block" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">PAGO (Quitado)</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-amber-500/30 border border-amber-500/50 inline-block" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">NÃO PAGO (A vencer)</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-rose-500/30 border border-rose-500/50 inline-block" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">ATRASO (Vencido)</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-[#181a1f] border border-neutral-700 inline-block" />
+                  <span className="text-neutral-400 text-[11px]">PRÉ (Anterior à matrícula)</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-sky-500/30 border border-sky-500/50 inline-block" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">PARCIAL</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded bg-indigo-500/30 border border-indigo-500/50 inline-block" />
+                  <span className="text-neutral-300 font-semibold text-[11px]">BOLSISTA</span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-neutral-500 italic">
+                Clique nos meses para alternar entre PAGO e NÃO PAGO
+              </div>
+            </div>
           </div>
+        </>
+      )}
 
-          {/* Legenda de Status no Rodapé */}
-          <div className="p-3 bg-[#0c0d0f] border-t border-[#25282f] flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="text-[11px] font-mono font-bold uppercase text-neutral-400">
-                Legenda:
+      {/* Barra Flutuante de Ação no Mobile (quando há alterações pendentes) */}
+      {pendingChanges.size > 0 && (
+        <div className="lg:hidden fixed bottom-4 left-3 right-3 z-40 p-3 bg-[#141619]/95 border border-amber-500/40 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 animate-fade-in">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-xs font-black text-amber-300">
+                {pendingChanges.size} {pendingChanges.size === 1 ? 'alteração' : 'alterações'}
               </span>
-
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-emerald-500/30 border border-emerald-500/50 inline-block" />
-                <span className="text-neutral-300 font-semibold text-[11px]">PAGO (Quitado)</span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-amber-500/30 border border-amber-500/50 inline-block" />
-                <span className="text-neutral-300 font-semibold text-[11px]">NÃO PAGO (A vencer)</span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-rose-500/30 border border-rose-500/50 inline-block" />
-                <span className="text-neutral-300 font-semibold text-[11px]">ATRASO (Vencido)</span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-[#181a1f] border border-neutral-700 inline-block" />
-                <span className="text-neutral-400 text-[11px]">PRÉ (Anterior à matrícula)</span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-sky-500/30 border border-sky-500/50 inline-block" />
-                <span className="text-neutral-300 font-semibold text-[11px]">PARCIAL</span>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-indigo-500/30 border border-indigo-500/50 inline-block" />
-                <span className="text-neutral-300 font-semibold text-[11px]">BOLSISTA</span>
-              </div>
+              <span className="text-[10px] text-neutral-400">Pronto para lançar</span>
             </div>
-
-            <div className="text-[11px] text-neutral-500 italic">
-              Clique nos meses para alternar entre PAGO e NÃO PAGO
-            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleDiscardChanges}
+              className="px-2.5 py-1.5 text-xs text-neutral-400 hover:text-rose-400 bg-neutral-900 border border-neutral-700 rounded-xl"
+            >
+              Descartar
+            </button>
+            <button
+              onClick={() => setShowConfirmModal(true)}
+              className="px-3.5 py-1.5 text-xs font-black bg-amber-500 text-neutral-950 rounded-xl shadow active:scale-95 flex items-center gap-1.5"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Lançar</span>
+            </button>
           </div>
         </div>
       )}
