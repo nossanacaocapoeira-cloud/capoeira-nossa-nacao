@@ -81,7 +81,7 @@ export function AddFeeModal({
 
         const effectiveScholarship = Boolean(stdScholarship);
         setIsScholarship(effectiveScholarship);
-        setAmount(effectiveScholarship ? 0 : (stdAmount ?? 0));
+        setAmount(effectiveScholarship ? 0 : (stdAmount && stdAmount > 0 ? stdAmount : 50));
 
         const dayPadded = String(Math.min(Math.max(stdDueDay || 10, 1), 31)).padStart(2, '0');
         setDueDate(`${currentYear}-${currentMonth}-${dayPadded}`);

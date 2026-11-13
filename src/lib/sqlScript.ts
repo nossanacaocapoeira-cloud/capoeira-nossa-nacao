@@ -20,9 +20,16 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   guardian_phone TEXT,
   role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
   active BOOLEAN NOT NULL DEFAULT true,
+  monthly_fee_amount NUMERIC(10,2) DEFAULT 0,
+  due_day INTEGER DEFAULT 10,
+  is_scholarship BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS monthly_fee_amount NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS due_day INTEGER DEFAULT 10;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_scholarship BOOLEAN DEFAULT false;
 
 -- 3. TABELA: MONTHLY_FEES (MENSALIDADES)
 CREATE TABLE IF NOT EXISTS public.monthly_fees (

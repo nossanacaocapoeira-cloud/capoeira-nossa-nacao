@@ -62,10 +62,10 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
           : dueDay;
 
       await dbService.updateStudent(student.id, {
-        fullName: fullName.trim(),
-        nickname: nickname.trim() || undefined,
+        fullName: fullName.trim() || 'Aluno',
+        nickname: nickname.trim() || fullName.trim() || 'Aluno',
         dateOfBirth,
-        address: address.trim(),
+        address: address.trim() || 'Não informado',
         whatsapp: whatsapp.trim() || undefined,
         guardianName: guardianName.trim() || undefined,
         guardianPhone: guardianPhone.trim() || undefined,

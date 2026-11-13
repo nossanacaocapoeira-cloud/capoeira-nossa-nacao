@@ -200,16 +200,21 @@ export function calculateNextMonthDueDate(referenceDateStr: string): string {
 }
 
 /**
- * Derives the database-compatible reference month (e.g. "Setembro/2026") from a full reference date (YYYY-MM-DD or DD/MM/YYYY).
+ * Derives the database-compatible reference month (e.g. "Setembro/2026") from a reference date or competence string (YYYY-MM-DD, DD/MM/YYYY, YYYY-MM, or Mes/YYYY).
  */
 export function deriveReferenceMonth(referenceDateStr: string): string {
   if (!referenceDateStr) return '';
 
-  let year: number = 2026;
-  let month: number = 9;
+  const sp = getSaoPauloDate();
+  let year: number = sp.year;
+  let month: number = sp.month;
 
   const trimmed = referenceDateStr.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const parts = trimmed.split('-');
+    year = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10);
+  } else if (/^\d{4}-\d{2}$/.test(trimmed)) {
     const parts = trimmed.split('-');
     year = parseInt(parts[0], 10);
     month = parseInt(parts[1], 10);
@@ -217,9 +222,21 @@ export function deriveReferenceMonth(referenceDateStr: string): string {
     const parts = trimmed.split('/');
     month = parseInt(parts[1], 10);
     year = parseInt(parts[2], 10);
+  } else {
+    const ptMatch = trimmed.match(/^([A-Za-zçÇãÃáÁéÉíÍóÓúÚ]+)\s*\/\s*(\d{4})$/i);
+    if (ptMatch) {
+      const nameStr = ptMatch[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const idx = PT_MONTHS.findIndex(
+        (m) => m.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === nameStr
+      );
+      if (idx >= 0) {
+        month = idx + 1;
+        year = parseInt(ptMatch[2], 10);
+      }
+    }
   }
 
-  const monthName = PT_MONTHS[month - 1] || 'Setembro';
+  const monthName = PT_MONTHS[month - 1] || PT_MONTHS[sp.month - 1] || 'Setembro';
   return `${monthName}/${year}`;
 }
 

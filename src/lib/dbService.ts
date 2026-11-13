@@ -128,6 +128,118 @@ export async function markRecordAsDeleted(params: {
   } catch {}
 }
 
+export async function unmarkRecordAsDeleted(params: {
+  paymentIds?: (string | null | undefined)[];
+  feeIds?: (string | null | undefined)[];
+  debtIds?: (string | null | undefined)[];
+}): Promise<void> {
+  const reg = await getDeletedRecordsRegistry();
+  let changed = false;
+  for (const id of params.paymentIds || []) {
+    if (id && reg.paymentIds.has(id)) {
+      reg.paymentIds.delete(id);
+      changed = true;
+    }
+  }
+  for (const id of params.feeIds || []) {
+    if (id && reg.feeIds.has(id)) {
+      reg.feeIds.delete(id);
+      changed = true;
+    }
+  }
+  for (const id of params.debtIds || []) {
+    if (id && reg.debtIds.has(id)) {
+      reg.debtIds.delete(id);
+      changed = true;
+    }
+  }
+  if (changed) {
+    const payload = {
+      payment_ids: Array.from(reg.paymentIds),
+      fee_ids: Array.from(reg.feeIds),
+      debt_ids: Array.from(reg.debtIds),
+    };
+    writeLocalDeletedRecords(payload);
+    try {
+      await supabase.from('system_settings').upsert({
+        key: 'deleted_records',
+        value: payload,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {}
+  }
+}
+
+export interface StudentFinancialConfigItem {
+  monthly_fee_amount: number;
+  due_day: number;
+  is_scholarship: boolean;
+}
+
+export type StudentsFinancialConfigMap = Record<string, StudentFinancialConfigItem>;
+
+const STUDENTS_FINANCIAL_STORAGE_KEY = 'capoeira:students_financial_config_v1';
+
+function readLocalStudentsFinancialConfig(): StudentsFinancialConfigMap {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(STUDENTS_FINANCIAL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalStudentsFinancialConfig(data: StudentsFinancialConfigMap) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STUDENTS_FINANCIAL_STORAGE_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+export async function getStudentsFinancialConfig(): Promise<StudentsFinancialConfigMap> {
+  const local = readLocalStudentsFinancialConfig();
+  try {
+    const { data } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'students_financial_config')
+      .maybeSingle();
+
+    const val = data?.value as StudentsFinancialConfigMap | null;
+    if (val && typeof val === 'object') {
+      const merged = { ...local, ...val };
+      writeLocalStudentsFinancialConfig(merged);
+      return merged;
+    }
+  } catch {}
+  return local;
+}
+
+export async function saveStudentFinancialConfig(
+  studentId: string,
+  config: Partial<StudentFinancialConfigItem>
+): Promise<void> {
+  if (!studentId) return;
+  const current = await getStudentsFinancialConfig();
+  const existing = current[studentId] || { monthly_fee_amount: 0, due_day: 10, is_scholarship: false };
+  const updated: StudentFinancialConfigItem = {
+    monthly_fee_amount: config.monthly_fee_amount !== undefined ? Number(config.monthly_fee_amount) : existing.monthly_fee_amount,
+    due_day: config.due_day !== undefined ? Number(config.due_day) : existing.due_day,
+    is_scholarship: config.is_scholarship !== undefined ? Boolean(config.is_scholarship) : existing.is_scholarship,
+  };
+  current[studentId] = updated;
+  writeLocalStudentsFinancialConfig(current);
+
+  try {
+    await supabase.from('system_settings').upsert({
+      key: 'students_financial_config',
+      value: current,
+      updated_at: new Date().toISOString(),
+    });
+  } catch {}
+}
+
 export function isPaymentRecordActive(
   p: any,
   deletedReg: DeletedRecordsRegistry,
@@ -684,7 +796,7 @@ export const dbService = {
 
       const deletedReg = await getDeletedRecordsRegistry();
       const fees = ((data || []) as MonthlyFee[]).filter(
-        (f: any) => f && !f.deleted_at && f.status !== 'cancelled' && !deletedReg.feeIds.has(f.id)
+        (f: any) => f && !f.deleted_at && f.status !== 'cancelled' && (f.status === 'paid' || !deletedReg.feeIds.has(f.id))
       );
       const open = fees.filter((f) => f && f.status !== 'paid' && f.status !== 'cancelled');
       const paid = fees.filter((f) => f && f.status === 'paid');
@@ -1206,9 +1318,11 @@ export const dbService = {
 
     const rawProfiles = profilesRes.data || [];
     const rawStudents = rawProfiles.filter(
-      (p) => !p.deleted_at && (p.role === 'student' || (!p.role && p.role !== 'admin'))
+      (p) => !p.deleted_at && p.role !== 'admin'
     );
     if (rawStudents.length === 0) return [];
+
+    const finConfig = await getStudentsFinancialConfig();
 
     const allFees = feesRes.data || [];
     const allDebts = debtsRes.data || [];
@@ -1217,7 +1331,6 @@ export const dbService = {
     const productOpenMap: Record<string, number> = {};
     const hasOverdueMap: Record<string, boolean> = {};
     const feeCountMap: Record<string, number> = {};
-    const isScholarshipMap: Record<string, boolean> = {};
     const latestPaidDueDateMap: Record<string, string> = {};
     const hasCurrentCyclePaidMap: Record<string, boolean> = {};
 
@@ -1225,12 +1338,6 @@ export const dbService = {
 
     for (const f of allFees) {
       feeCountMap[f.student_id] = (feeCountMap[f.student_id] || 0) + 1;
-      if (
-        f.status === 'scholarship' ||
-        (f.notes && f.notes.includes('[BOLSISTA]'))
-      ) {
-        isScholarshipMap[f.student_id] = true;
-      }
 
       const rem = Number(f.remaining_amount) || 0;
       const isPaid = f.status === 'paid' || (rem === 0 && Number(f.amount_paid) > 0);
@@ -1261,7 +1368,17 @@ export const dbService = {
     }
 
     let result: StudentWithBalance[] = rawStudents.map((p) => {
-      const isScholarship = Boolean(p.is_scholarship || isScholarshipMap[p.id]);
+      const savedFin = finConfig[p.id];
+      const isScholarship = savedFin?.is_scholarship !== undefined
+        ? Boolean(savedFin.is_scholarship)
+        : Boolean(p.is_scholarship);
+      const monthlyFeeAmount = savedFin?.monthly_fee_amount !== undefined
+        ? Number(savedFin.monthly_fee_amount)
+        : (Number(p.monthly_fee_amount) || 0);
+      const dueDay = savedFin?.due_day !== undefined
+        ? Number(savedFin.due_day)
+        : (p.due_day ?? 10);
+
       const monthlyOpen = isScholarship ? 0 : Number((monthlyOpenMap[p.id] || 0).toFixed(2));
       const productOpen = Number((productOpenMap[p.id] || 0).toFixed(2));
       const totalOpen = Number((monthlyOpen + productOpen).toFixed(2));
@@ -1289,8 +1406,8 @@ export const dbService = {
 
       return {
         ...p,
-        monthly_fee_amount: Number(p.monthly_fee_amount) || 0,
-        due_day: p.due_day ?? 10,
+        monthly_fee_amount: monthlyFeeAmount,
+        due_day: dueDay,
         totalOpen,
         totalMonthlyOpen: monthlyOpen,
         totalProductOpen: productOpen,
@@ -1472,14 +1589,17 @@ export const dbService = {
     dueDay?: number | null;
     monthlyFeeAmount?: number | null;
   }): Promise<Student> {
+    const cleanFullName = (params.fullName || 'Aluno').trim() || 'Aluno';
+    const cleanNickname = (params.nickname || '').trim() || cleanFullName;
+    const cleanAddress = (params.address || 'Não informado').trim() || 'Não informado';
     const cleanWhatsApp = params.whatsapp ? normalizePhone(params.whatsapp) : null;
     const nowIso = new Date().toISOString();
 
     const newStudent: Record<string, any> = {
-      full_name: params.fullName.trim(),
-      nickname: params.nickname?.trim() || null,
-      date_of_birth: params.dateOfBirth,
-      address: params.address.trim(),
+      full_name: cleanFullName,
+      nickname: cleanNickname,
+      date_of_birth: params.dateOfBirth || '2000-01-01',
+      address: cleanAddress,
       whatsapp: params.whatsapp?.trim() || null,
       whatsapp_normalized: cleanWhatsApp,
       role: 'student',
@@ -1553,19 +1673,39 @@ export const dbService = {
         : null;
     const finalScholarship = Boolean(params.isScholarship);
 
+    const cleanFullName = (params.fullName || '').trim() || 'Aluno';
+    const cleanNickname = (params.nickname || '').trim() || cleanFullName;
+    const cleanAddress = (params.address || '').trim() || 'Não informado';
+
     // Constrói estritamente com os campos reais existentes na tabela public.profiles
     const updatePayload: Record<string, any> = {
-      full_name: params.fullName.trim(),
-      nickname: params.nickname?.trim() || null,
-      date_of_birth: params.dateOfBirth || null,
-      address: params.address.trim(),
-      whatsapp: params.whatsapp?.trim() || null,
-      whatsapp_normalized: cleanWhatsApp,
+      full_name: cleanFullName,
+      nickname: cleanNickname,
+      address: cleanAddress,
       monthly_fee_amount: finalFee,
       due_day: finalDueDay,
       is_scholarship: finalScholarship,
       updated_at: nowIso,
     };
+
+    if (params.dateOfBirth) {
+      updatePayload.date_of_birth = params.dateOfBirth;
+    }
+
+    if (params.whatsapp !== undefined) {
+      if (params.whatsapp?.trim()) {
+        updatePayload.whatsapp = params.whatsapp.trim();
+        updatePayload.whatsapp_normalized = cleanWhatsApp || params.whatsapp.trim();
+      }
+    }
+
+    if (params.guardianName !== undefined) {
+      updatePayload.guardian_name = params.guardianName?.trim() || null;
+    }
+
+    if (params.guardianPhone !== undefined) {
+      updatePayload.guardian_phone = params.guardianPhone?.trim() || null;
+    }
 
     if (params.active !== undefined) {
       updatePayload.active = params.active;
@@ -1591,11 +1731,18 @@ export const dbService = {
       data = res.data;
     }
 
+    // Salva também nas configurações financeiras persistentes (system_settings + localStorage)
+    await saveStudentFinancialConfig(studentId, {
+      monthly_fee_amount: finalFee,
+      due_day: finalDueDay || 10,
+      is_scholarship: finalScholarship,
+    });
+
     const updatedProfile = {
       ...data,
       id: studentId,
       full_name: params.fullName.trim(),
-      nickname: params.nickname?.trim() || data?.nickname || null,
+      nickname: params.nickname?.trim() || data?.nickname || params.fullName.trim(),
       date_of_birth: params.dateOfBirth || data?.date_of_birth || null,
       guardian_name: params.guardianName || data?.guardian_name || null,
       guardian_phone: params.guardianPhone || data?.guardian_phone || null,
@@ -1790,8 +1937,10 @@ export const dbService = {
     }
 
     const existing = (existingFees || []).find((f) => {
-      const fRef = (f.reference_month || '').substring(0, 7);
-      return fRef === yearMonth;
+      const fYm = toReferenceYearMonth(f.reference_month) || (f.due_date ? f.due_date.substring(0, 7) : '');
+      const rawSub = (f.reference_month || '').substring(0, 7);
+      const dueSub = (f.due_date || '').substring(0, 7);
+      return fYm === yearMonth || rawSub === yearMonth || dueSub === yearMonth;
     });
 
     let finalFee: MonthlyFee;
@@ -1945,6 +2094,18 @@ export const dbService = {
       }
     } catch (movErr) {
       console.warn('[addMonthlyFee] Auditoria não pôde ser gravada:', movErr);
+    }
+
+    // Se o aluno ainda não tinha valor mensal configurado e estamos cadastrando um valor > 0:
+    if (effectiveAmount > 0 && (!studentProfile.monthly_fee_amount || Number(studentProfile.monthly_fee_amount) <= 0)) {
+      try {
+        const parsedDueDay = cleanDueDate ? parseInt(cleanDueDate.substring(8, 10), 10) : 10;
+        await saveStudentFinancialConfig(studentProfile.id, {
+          monthly_fee_amount: effectiveAmount,
+          due_day: !isNaN(parsedDueDay) ? parsedDueDay : 10,
+          is_scholarship: isScholarship,
+        });
+      } catch {}
     }
 
     // 8. Disparo de sincronização global imediata
@@ -2124,37 +2285,30 @@ export const dbService = {
     }
 
     // 2. Verificar mensalidades já existentes neste mês para evitar duplicidade
-    const { data: existingFees } = await supabase
+    const { data: allExistingFees } = await supabase
       .from('monthly_fees')
-      .select('student_id')
-      .eq('reference_month', params.referenceMonth.trim());
+      .select('student_id, reference_month, due_date, deleted_at')
+      .neq('status', 'cancelled');
 
-    const existingStudentIds = new Set((existingFees || []).map((f) => f.student_id));
+    const targetRefYm = toReferenceYearMonth(params.referenceMonth);
+    const existingStudentIds = new Set(
+      (allExistingFees || [])
+        .filter((f: any) => !f.deleted_at)
+        .filter((f: any) => {
+          const fYm = toReferenceYearMonth(f.reference_month) || (f.due_date ? f.due_date.substring(0, 7) : '');
+          return fYm === targetRefYm;
+        })
+        .map((f: any) => f.student_id)
+    );
+
+    const finConfig = await getStudentsFinancialConfig();
 
     // Calcular data de vencimento (YYYY-MM-DD)
-    const today = new Date();
-    const [monthName, yearStr] = params.referenceMonth.split('/');
-    let targetYear = today.getFullYear();
-    let targetMonth = today.getMonth() + 1; // 1-indexed
-
-    if (yearStr && !isNaN(Number(yearStr))) {
-      targetYear = Number(yearStr);
-    }
-    // Converter nome do mês em pt-BR
-    const ptMonths = [
-      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
-    ];
-    if (monthName) {
-      const idx = ptMonths.findIndex((m) => monthName.toLowerCase().includes(m));
-      if (idx !== -1) {
-        targetMonth = idx + 1;
-      }
-    }
-
-    const dueDayPadded = String(Math.min(params.dueDay, 28)).padStart(2, '0');
+    const [targetYearStr, targetMonthStr] = targetRefYm.split('-');
+    const targetYear = parseInt(targetYearStr, 10) || new Date().getFullYear();
+    const targetMonth = parseInt(targetMonthStr, 10) || (new Date().getMonth() + 1);
+    const maxDaysInMonth = new Date(targetYear, targetMonth, 0).getDate();
     const targetMonthPadded = String(targetMonth).padStart(2, '0');
-    const dueDate = `${targetYear}-${targetMonthPadded}-${dueDayPadded}`;
 
     let createdCount = 0;
     let skippedCount = 0;
@@ -2165,15 +2319,23 @@ export const dbService = {
         continue;
       }
 
+      const savedFin = finConfig[student.id];
       // 1. Bolsista: mensalidade zerada ou isenta
-      const isScholarship = Boolean(student.is_scholarship);
+      const isScholarship = savedFin?.is_scholarship !== undefined
+        ? Boolean(savedFin.is_scholarship)
+        : Boolean(student.is_scholarship);
       // 2. Valor: A configuração individual do aluno é a ÚNICA fonte de verdade
       const configuredFee = isScholarship
         ? 0
-        : (Number(student.monthly_fee_amount ?? (student as any).fee_amount) || params.defaultAmount);
+        : (Number(savedFin?.monthly_fee_amount) > 0
+          ? Number(savedFin.monthly_fee_amount)
+          : (Number(student.monthly_fee_amount) || Number((student as any).fee_amount) || params.defaultAmount));
       // 3. Dia de vencimento: configuração individual do aluno
-      const studentDueDay = Number(student.due_day) || params.dueDay || 10;
-      const studentDueDayPadded = String(Math.min(studentDueDay, 28)).padStart(2, '0');
+      const studentDueDay = (savedFin?.due_day !== undefined
+        ? Number(savedFin.due_day)
+        : (Number(student.due_day) || params.dueDay || 10));
+      const clampedStudentDueDay = Math.min(Math.max(studentDueDay, 1), maxDaysInMonth);
+      const studentDueDayPadded = String(clampedStudentDueDay).padStart(2, '0');
       const studentDueDate = `${targetYear}-${targetMonthPadded}-${studentDueDayPadded}`;
 
       try {
@@ -3131,12 +3293,25 @@ export const dbService = {
         return null;
       }
 
+      const finConfig = await getStudentsFinancialConfig();
+      const savedFin = finConfig[profile.id];
+      const monthlyFeeAmount = savedFin?.monthly_fee_amount !== undefined
+        ? Number(savedFin.monthly_fee_amount)
+        : (Number(profile.monthly_fee_amount ?? profile.fee_amount) || 0);
+      const dueDay = savedFin?.due_day !== undefined
+        ? Number(savedFin.due_day)
+        : (profile.due_day ?? 10);
+      const isScholarship = savedFin?.is_scholarship !== undefined
+        ? Boolean(savedFin.is_scholarship)
+        : Boolean(profile.is_scholarship);
+
       return {
         ...profile,
         role: profile.role || 'student',
-        fee_amount: profile.monthly_fee_amount ?? profile.fee_amount ?? 0,
-        monthly_fee_amount: profile.monthly_fee_amount ?? profile.fee_amount ?? 0,
-        due_day: profile.due_day ?? 10,
+        fee_amount: monthlyFeeAmount,
+        monthly_fee_amount: monthlyFeeAmount,
+        due_day: dueDay,
+        is_scholarship: isScholarship,
       } as unknown as (Student & Profile);
     } catch (e) {
       console.error('Erro ao buscar perfil do aluno:', e);
@@ -3575,7 +3750,7 @@ export const dbService = {
     ]);
 
     const fees = (feesRes.data || []).filter(
-      (f: any) => !f.deleted_at && f.status !== 'cancelled' && !deletedReg.feeIds.has(f.id)
+      (f: any) => !f.deleted_at && f.status !== 'cancelled' && (f.status === 'paid' || !deletedReg.feeIds.has(f.id))
     );
     const historyFees = (historyFeesRes.data || []).filter(
       (f: any) => !f.deleted_at && !deletedReg.feeIds.has(f.id)
@@ -3587,7 +3762,7 @@ export const dbService = {
       if (f.student_id && (f.reference_month || f.due_date)) {
         const ym = toReferenceYearMonth(f.reference_month) || (f.due_date ? f.due_date.substring(0, 7) : '');
         if (ym.startsWith(`${year}-`)) {
-          const key = `${f.student_id}_${ym}`;
+          const key = `${String(f.student_id).trim()}_${ym}`;
           const existing = feeMap.get(key);
           if (
             !existing ||
@@ -3614,7 +3789,7 @@ export const dbService = {
 
     const rows: AnnualGridStudentRow[] = allStudents.map((std) => {
       const isScholarship = Boolean(std.is_scholarship);
-      const feeAmount = Number(std.monthly_fee_amount ?? std.fee_amount) || 0;
+      const feeAmount = Number(std.monthly_fee_amount) || Number((std as any).fee_amount) || 0;
       const dueDay = Number(std.due_day) || 10;
 
       // DATA REAL DE CADASTRO DO ALUNO (created_at no fuso oficial America/Sao_Paulo)
@@ -3629,7 +3804,7 @@ export const dbService = {
 
         const isPre = false;
 
-        const feeKey = `${std.id}_${refMonth}`;
+        const feeKey = `${String(std.id).trim()}_${refMonth}`;
         const fee = feeMap.get(feeKey);
 
         let status: GridFeeStatus;
@@ -3641,7 +3816,9 @@ export const dbService = {
         const amountPaid = fee ? Number(fee.amount_paid || 0) : 0;
         const remainingAmount = fee ? (isFeePaid ? 0 : (feeAmount > 0 ? feeAmount : Number(fee.remaining_amount))) : 0;
         const paidAt = fee?.paid_at || null;
-        const calculatedDueDate = `${year}-${monthIndexStr}-${String(dueDay).padStart(2, '0')}`;
+        const maxDaysInMonth = new Date(year, m, 0).getDate();
+        const clampedDueDay = Math.min(Math.max(dueDay, 1), maxDaysInMonth);
+        const calculatedDueDate = `${year}-${monthIndexStr}-${String(clampedDueDay).padStart(2, '0')}`;
         const actualDueDate = fee?.due_date ? fee.due_date.substring(0, 10) : calculatedDueDate;
 
         // FONTE ÚNICA DE VERDADE: SOMENTE monthly_fees
@@ -3705,6 +3882,300 @@ export const dbService = {
   },
 
   // -------------------------------------------------------------
+  // CENTRALIZADO: Baixar Mensalidade como PAGO (Fonte Oficial Única: public.monthly_fees)
+  // -------------------------------------------------------------
+  async markMonthlyFeeAsPaid(params: {
+    studentId: string;
+    referenceMonth: string;
+    monthLabel?: string;
+    feeId?: string | null;
+    feeAmount?: number;
+    dueDay?: number;
+    adminId?: string;
+    adminEmail?: string;
+    skipNotify?: boolean;
+  }): Promise<{ success: boolean; fee: MonthlyFee }> {
+    const targetStudentId = await this.ensureStudentId(params.studentId);
+    const ym = toReferenceYearMonth(params.referenceMonth);
+    const [yPart, mPart] = ym.split('-');
+    const nowIso = new Date().toISOString();
+
+    // 1. Busca perfil do aluno diretamente no banco de dados para obter valor individual configurado
+    const { data: studentProfile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', targetStudentId)
+      .maybeSingle();
+
+    if (profileErr) {
+      throw new Error(`Erro ao buscar dados do aluno no banco: ${profileErr.message}`);
+    }
+
+    const finConfig = await getStudentsFinancialConfig();
+    const savedFin = finConfig[targetStudentId];
+    const isScholarship = savedFin?.is_scholarship !== undefined
+      ? Boolean(savedFin.is_scholarship)
+      : Boolean(studentProfile?.is_scholarship);
+
+    // 2. Localiza se já existe mensalidade para essa competência no banco
+    let resolvedFeeId = params.feeId || null;
+    let existingFee: MonthlyFee | null = null;
+
+    if (resolvedFeeId) {
+      const { data: fData } = await supabase
+        .from('monthly_fees')
+        .select('*')
+        .eq('id', resolvedFeeId)
+        .maybeSingle();
+      if (fData) {
+        existingFee = fData as MonthlyFee;
+      }
+    }
+
+    if (!existingFee) {
+      const { data: existingFeeRecords, error: fetchErr } = await supabase
+        .from('monthly_fees')
+        .select('*')
+        .eq('student_id', targetStudentId)
+        .neq('status', 'cancelled');
+
+      if (!fetchErr && existingFeeRecords) {
+        const match = existingFeeRecords.find((f: any) => {
+          const fYm = toReferenceYearMonth(f.reference_month);
+          const rawSub = (f.reference_month || '').substring(0, 7);
+          const dueSub = (f.due_date || '').substring(0, 7);
+          return fYm === ym || rawSub === ym || dueSub === ym;
+        });
+        if (match) {
+          existingFee = match as MonthlyFee;
+          resolvedFeeId = match.id;
+        }
+      }
+    }
+
+    // Calcula valor individual sem NUNCA usar valor fixo/hardcoded
+    const individualAmount = isScholarship
+      ? 0
+      : (Number(savedFin?.monthly_fee_amount) > 0
+        ? Number(savedFin.monthly_fee_amount)
+        : (Number(studentProfile?.monthly_fee_amount) > 0
+          ? Number(studentProfile.monthly_fee_amount)
+          : (Number((studentProfile as any)?.fee_amount) > 0
+            ? Number((studentProfile as any).fee_amount)
+            : (Number(existingFee?.amount) > 0
+              ? Number(existingFee.amount)
+              : (Number(params.feeAmount) > 0 ? Number(params.feeAmount) : 0)))));
+
+    const studentDueDay = Number(savedFin?.due_day) > 0
+      ? Number(savedFin.due_day)
+      : (Number(studentProfile?.due_day) > 0
+        ? Number(studentProfile.due_day)
+        : (Number(params.dueDay) > 0 ? Number(params.dueDay) : 10));
+
+    const maxDaysInMonth = new Date(Number(yPart), Number(mPart), 0).getDate();
+    const targetDueDate = `${yPart}-${mPart}-${String(Math.min(Math.max(studentDueDay, 1), maxDaysInMonth)).padStart(2, '0')}`;
+    let persistedFee: MonthlyFee;
+
+    // 3. Atualiza ou cria em monthly_fees (fonte oficial)
+    if (existingFee) {
+      const updatePayload: Record<string, any> = {
+        status: 'paid',
+        amount: individualAmount,
+        amount_paid: individualAmount,
+        remaining_amount: 0,
+        due_date: existingFee.due_date || targetDueDate,
+        paid_at: existingFee.paid_at || nowIso,
+        updated_at: nowIso,
+      };
+
+      const { data: updData, error: updErr } = await supabase
+        .from('monthly_fees')
+        .update(updatePayload)
+        .eq('id', existingFee.id)
+        .select('*')
+        .maybeSingle();
+
+      if (updErr) {
+        throw new Error(`Erro ao persistir baixa da mensalidade no Supabase: ${updErr.message}`);
+      }
+
+      persistedFee = (updData as MonthlyFee) || {
+        ...existingFee,
+        ...updatePayload,
+      };
+      resolvedFeeId = existingFee.id;
+    } else {
+      const isoRef = toReferenceMonthIso(params.referenceMonth);
+      const insertPayload: Record<string, any> = {
+        student_id: targetStudentId,
+        reference_month: isoRef,
+        description: `Mensalidade ${params.monthLabel || formatReferenceDisplay(ym)}`,
+        amount: individualAmount,
+        amount_paid: individualAmount,
+        remaining_amount: 0,
+        due_date: targetDueDate,
+        status: 'paid',
+        paid_at: nowIso,
+        notes: 'Baixa registrada via Grade Anual de Mensalidades',
+        created_at: nowIso,
+        updated_at: nowIso,
+      };
+      if (params.adminId && isUuid(params.adminId)) {
+        insertPayload.created_by = params.adminId;
+      }
+
+      let { data: newFee, error: newFeeErr } = await supabase
+        .from('monthly_fees')
+        .insert(insertPayload)
+        .select('*')
+        .maybeSingle();
+
+      if (newFeeErr && insertPayload.created_by) {
+        delete insertPayload.created_by;
+        const retryRes = await supabase
+          .from('monthly_fees')
+          .insert(insertPayload)
+          .select('*')
+          .maybeSingle();
+        newFee = retryRes.data;
+        newFeeErr = retryRes.error;
+      }
+
+      if (newFeeErr || !newFee) {
+        throw new Error(`Erro ao criar mensalidade paga no Supabase: ${newFeeErr?.message || 'Falha ao salvar'}`);
+      }
+
+      persistedFee = newFee as MonthlyFee;
+      resolvedFeeId = newFee.id;
+    }
+
+    // Desmarca da lista de deletados para garantir que não fique invisível
+    await unmarkRecordAsDeleted({ feeIds: [persistedFee.id] });
+
+    // 4. Vincula pagamento em payments sem duplicidade
+    if (resolvedFeeId && individualAmount > 0) {
+      const { data: existingPayments } = await supabase
+        .from('payments')
+        .select('id, amount')
+        .eq('monthly_fee_id', resolvedFeeId);
+
+      if (existingPayments && existingPayments.length > 0) {
+        const firstPayment = existingPayments[0];
+        await unmarkRecordAsDeleted({ paymentIds: [firstPayment.id] });
+        if (Number(firstPayment.amount) !== individualAmount) {
+          await supabase
+            .from('payments')
+            .update({
+              amount: individualAmount,
+              paid_at: nowIso,
+              notes: `Baixa via Grade Anual (${formatCurrency(individualAmount)})`,
+            })
+            .eq('id', firstPayment.id);
+        }
+        // Limpa duplicidades acidentais
+        if (existingPayments.length > 1) {
+          for (let i = 1; i < existingPayments.length; i++) {
+            await supabase.from('payments').delete().eq('id', existingPayments[i].id);
+          }
+        }
+      } else {
+        const payPayload: Record<string, any> = {
+          student_id: targetStudentId,
+          payment_type: 'monthly_fee',
+          monthly_fee_id: resolvedFeeId,
+          amount: individualAmount,
+          payment_method: 'dinheiro',
+          notes: 'Baixa registrada via Grade Anual de Mensalidades',
+          paid_at: nowIso,
+          created_at: nowIso,
+        };
+        if (params.adminId && isUuid(params.adminId)) {
+          payPayload.recorded_by = params.adminId;
+        }
+        if (params.adminEmail) {
+          payPayload.recorded_by_email = params.adminEmail;
+        }
+
+        let { data: newPay, error: payErr } = await supabase
+          .from('payments')
+          .insert(payPayload)
+          .select('*')
+          .maybeSingle();
+
+        if (payErr) {
+          // Fallback robusto sem colunas opcionais que possam não existir na tabela
+          const minPayload = {
+            student_id: targetStudentId,
+            payment_type: 'monthly_fee',
+            monthly_fee_id: resolvedFeeId,
+            amount: individualAmount,
+            payment_method: 'dinheiro',
+            paid_at: nowIso,
+          };
+          const minRes = await supabase.from('payments').insert(minPayload).select('*').maybeSingle();
+          if (minRes.data) {
+            await unmarkRecordAsDeleted({ paymentIds: [minRes.data.id] });
+          }
+        } else if (newPay) {
+          await unmarkRecordAsDeleted({ paymentIds: [newPay.id] });
+        }
+      }
+
+      // 5. Linha única e clara no histórico / financial_movements
+      try {
+        const { data: existingMov } = await supabase
+          .from('financial_movements')
+          .select('id, movement_amount')
+          .eq('reference_id', resolvedFeeId)
+          .eq('type', 'PAYMENT')
+          .maybeSingle();
+
+        if (existingMov) {
+          if (Number(existingMov.movement_amount) !== individualAmount) {
+            await supabase
+              .from('financial_movements')
+              .update({
+                movement_amount: individualAmount,
+                previous_amount: individualAmount,
+                new_amount: 0,
+                description: `Mensalidade ${formatReferenceDisplay(params.referenceMonth)} marcada como PAGA`,
+              })
+              .eq('id', existingMov.id);
+          }
+        } else {
+          const movPayload: Record<string, any> = {
+            student_id: targetStudentId,
+            type: 'PAYMENT',
+            reference_type: 'monthly_fee',
+            reference_id: resolvedFeeId,
+            description: `Mensalidade ${formatReferenceDisplay(params.referenceMonth)} marcada como PAGA`,
+            previous_amount: individualAmount,
+            movement_amount: individualAmount,
+            new_amount: 0,
+            created_at: nowIso,
+          };
+          if (params.adminId && isUuid(params.adminId)) {
+            movPayload.performed_by = params.adminId;
+          }
+          if (params.adminEmail) {
+            movPayload.performed_by_email = params.adminEmail;
+          }
+          const { error: mErr } = await supabase.from('financial_movements').insert(movPayload);
+          if (mErr && movPayload.performed_by) {
+            delete movPayload.performed_by;
+            await supabase.from('financial_movements').insert(movPayload);
+          }
+        }
+      } catch {}
+    }
+
+    if (!params.skipNotify) {
+      notifyFinancialUpdated({ studentId: targetStudentId, feeId: persistedFee.id });
+    }
+    return { success: true, fee: persistedFee };
+  },
+
+  // -------------------------------------------------------------
   // ADMIN: Lançar Alterações em Lote na Grade Anual (Persistência Real no Supabase)
   // -------------------------------------------------------------
   async batchApplyGridFees(
@@ -3737,14 +4208,23 @@ export const dbService = {
         throw new Error(`Erro ao buscar dados do aluno no banco: ${profileErr.message}`);
       }
 
-      const isScholarship = Boolean(studentProfile?.is_scholarship);
+      const finConfig = await getStudentsFinancialConfig();
+      const savedFin = finConfig[targetStudentId];
+      const isScholarship = savedFin?.is_scholarship !== undefined
+        ? Boolean(savedFin.is_scholarship)
+        : Boolean(studentProfile?.is_scholarship);
       // Para bolsista: 0. Para pagante: SEMPRE o valor configurado individualmente para o aluno!
       const studentFee = isScholarship
         ? 0
-        : (Number(studentProfile?.monthly_fee_amount) || Number(change.feeAmount) || 0);
-      const studentDueDay = Number(studentProfile?.due_day) || Number(change.dueDay) || 10;
+        : (savedFin?.monthly_fee_amount !== undefined && savedFin.monthly_fee_amount > 0
+          ? Number(savedFin.monthly_fee_amount)
+          : (Number(studentProfile?.monthly_fee_amount) || Number(change.feeAmount) || 0));
+      const studentDueDay = savedFin?.due_day !== undefined
+        ? Number(savedFin.due_day)
+        : (Number(studentProfile?.due_day) || Number(change.dueDay) || 10);
       const [yPart, mPart] = ym.split('-');
-      const targetDueDate = `${yPart}-${mPart}-${String(Math.min(Math.max(studentDueDay, 1), 28)).padStart(2, '0')}`;
+      const maxDaysInMonth = new Date(Number(yPart), Number(mPart), 0).getDate();
+      const targetDueDate = `${yPart}-${mPart}-${String(Math.min(Math.max(studentDueDay, 1), maxDaysInMonth)).padStart(2, '0')}`;
 
       // 2. Localiza se já existe mensalidade para essa competência no banco
       let resolvedFeeId = feeId;
@@ -3787,168 +4267,17 @@ export const dbService = {
 
       // 3. Processa conforme status alvo
       if (targetStatus === 'PAGO') {
-        if (existingFee) {
-          // Atualiza a mensalidade existente usando SEMPRE o valor individual configurado do aluno
-          const { error: updErr } = await supabase
-            .from('monthly_fees')
-            .update({
-              status: 'paid',
-              amount: studentFee,
-              amount_paid: studentFee,
-              remaining_amount: 0,
-              due_date: existingFee.due_date || targetDueDate,
-              paid_at: existingFee.paid_at || nowIso,
-              updated_at: nowIso,
-            })
-            .eq('id', existingFee.id);
-
-          if (updErr) {
-            throw new Error(`Erro ao persistir baixa da mensalidade de ${change.studentName}: ${updErr.message}`);
-          }
-          resolvedFeeId = existingFee.id;
-        } else {
-          // Cria nova mensalidade quitada com o valor individual do aluno
-          const feeInsertPayload: Record<string, any> = {
-            student_id: targetStudentId,
-            reference_month: isoRef,
-            description: `Mensalidade ${change.monthLabel || formatReferenceDisplay(referenceMonth)}`,
-            amount: studentFee,
-            amount_paid: studentFee,
-            remaining_amount: 0,
-            due_date: targetDueDate,
-            status: 'paid',
-            paid_at: nowIso,
-            notes: 'Baixa registrada via Grade Anual de Mensalidades',
-            created_at: nowIso,
-            updated_at: nowIso,
-          };
-          if (adminId && isUuid(adminId)) {
-            feeInsertPayload.created_by = adminId;
-          }
-
-          let { data: newFee, error: newFeeErr } = await supabase
-            .from('monthly_fees')
-            .insert(feeInsertPayload)
-            .select('*')
-            .single();
-
-          if (newFeeErr && feeInsertPayload.created_by) {
-            delete feeInsertPayload.created_by;
-            const retryRes = await supabase
-              .from('monthly_fees')
-              .insert(feeInsertPayload)
-              .select('*')
-              .single();
-            newFee = retryRes.data;
-            newFeeErr = retryRes.error;
-          }
-
-          if (newFeeErr || !newFee) {
-            throw new Error(`Erro ao criar mensalidade de ${change.studentName}: ${newFeeErr?.message || 'Falha ao salvar'}`);
-          }
-
-          existingFee = newFee as MonthlyFee;
-          resolvedFeeId = newFee.id;
-        }
-
-        // 4. Vincula o pagamento correspondente em payments
-        if (resolvedFeeId && studentFee > 0) {
-          const { data: existingPayment } = await supabase
-            .from('payments')
-            .select('id, amount')
-            .eq('monthly_fee_id', resolvedFeeId)
-            .maybeSingle();
-
-          if (existingPayment) {
-            if (Number(existingPayment.amount) !== studentFee) {
-              const { error: upPayErr } = await supabase
-                .from('payments')
-                .update({
-                  amount: studentFee,
-                  paid_at: nowIso,
-                  notes: `Baixa via Grade Anual (${formatCurrency(studentFee)})`,
-                })
-                .eq('id', existingPayment.id);
-              if (upPayErr) {
-                throw new Error(`Erro ao atualizar pagamento de ${change.studentName}: ${upPayErr.message}`);
-              }
-            }
-          } else {
-            const payPayload: Record<string, any> = {
-              student_id: targetStudentId,
-              payment_type: 'monthly_fee',
-              monthly_fee_id: resolvedFeeId,
-              amount: studentFee,
-              payment_method: 'dinheiro',
-              notes: 'Baixa registrada via Grade Anual de Mensalidades',
-              paid_at: nowIso,
-              created_at: nowIso,
-            };
-            if (adminId && isUuid(adminId)) {
-              payPayload.recorded_by = adminId;
-            }
-            if (adminEmail) {
-              payPayload.recorded_by_email = adminEmail;
-            }
-
-            let { error: payErr } = await supabase.from('payments').insert(payPayload);
-            if (payErr && payPayload.recorded_by) {
-              delete payPayload.recorded_by;
-              const retryPay = await supabase.from('payments').insert(payPayload);
-              payErr = retryPay.error;
-            }
-            if (payErr) {
-              throw new Error(`Erro ao registrar pagamento de ${change.studentName}: ${payErr.message}`);
-            }
-          }
-
-          // 5. Linha única e clara no histórico / financial_movements
-          try {
-            const { data: existingMov } = await supabase
-              .from('financial_movements')
-              .select('id, movement_amount')
-              .eq('reference_id', resolvedFeeId)
-              .eq('type', 'PAYMENT')
-              .maybeSingle();
-
-            if (existingMov) {
-              if (Number(existingMov.movement_amount) !== studentFee) {
-                await supabase
-                  .from('financial_movements')
-                  .update({
-                    movement_amount: studentFee,
-                    previous_amount: studentFee,
-                    new_amount: 0,
-                    description: `Mensalidade ${formatReferenceDisplay(referenceMonth)} marcada como PAGA`,
-                  })
-                  .eq('id', existingMov.id);
-              }
-            } else {
-              const movPayload: Record<string, any> = {
-                student_id: targetStudentId,
-                type: 'PAYMENT',
-                reference_type: 'monthly_fee',
-                reference_id: resolvedFeeId,
-                description: `Mensalidade ${formatReferenceDisplay(referenceMonth)} marcada como PAGA`,
-                previous_amount: studentFee,
-                movement_amount: studentFee,
-                new_amount: 0,
-                created_at: nowIso,
-              };
-              if (adminId && isUuid(adminId)) {
-                movPayload.performed_by = adminId;
-              }
-              if (adminEmail) {
-                movPayload.performed_by_email = adminEmail;
-              }
-              const { error: mErr } = await supabase.from('financial_movements').insert(movPayload);
-              if (mErr && movPayload.performed_by) {
-                delete movPayload.performed_by;
-                await supabase.from('financial_movements').insert(movPayload);
-              }
-            }
-          } catch {}
-        }
+        await this.markMonthlyFeeAsPaid({
+          studentId: targetStudentId,
+          referenceMonth,
+          monthLabel: change.monthLabel,
+          feeId: resolvedFeeId || existingFee?.id,
+          feeAmount: change.feeAmount,
+          dueDay: change.dueDay,
+          adminId,
+          adminEmail,
+          skipNotify: true,
+        });
         appliedCount++;
       } else if (targetStatus === 'NÃO PAGO') {
         // Marca/cria mensalidade como NÃO PAGO usando status válido do banco ('pending' ou fallback 'open')
@@ -3983,6 +4312,8 @@ export const dbService = {
           if (updErr) {
             throw new Error(`Erro ao atualizar mensalidade de ${change.studentName}: ${updErr.message}`);
           }
+
+          await unmarkRecordAsDeleted({ feeIds: [resolvedFeeId] });
 
           // Remove pagamento vinculado se existir
           const { data: linkedPays } = await supabase
@@ -4058,6 +4389,8 @@ export const dbService = {
           if (newFeeErr || !newFee) {
             throw new Error(`Erro ao lançar mensalidade de ${change.studentName}: ${newFeeErr?.message || 'Falha ao salvar'}`);
           }
+
+          await unmarkRecordAsDeleted({ feeIds: [newFee.id] });
 
           appliedCount++;
         }

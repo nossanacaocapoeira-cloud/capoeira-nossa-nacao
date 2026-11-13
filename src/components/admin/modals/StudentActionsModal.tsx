@@ -29,23 +29,25 @@ export const StudentActionsModal: React.FC<StudentActionsModalProps> = ({
   const { success, error: toastError } = useToast();
 
   // Estados dos campos configuráveis
-  const initialFee = Number(student.monthly_fee_amount) || 0;
+  const isScholarshipInitial = Boolean(student.is_scholarship || (student as any).isScholarship);
+  const rawInitialFee = Number(student.monthly_fee_amount) || 0;
+  const initialFee = isScholarshipInitial ? 0 : (rawInitialFee > 0 ? rawInitialFee : 50);
 
   const [feeAmount, setFeeAmount] = useState<number | string>(initialFee);
   const [dueDay, setDueDay] = useState<number | string>(student.due_day ?? 10);
-  const [isScholarship, setIsScholarship] = useState<boolean>(
-    Boolean(student.is_scholarship || (student as any).isScholarship)
-  );
+  const [isScholarship, setIsScholarship] = useState<boolean>(isScholarshipInitial);
 
   const [saving, setSaving] = useState(false);
 
   // Sincroniza os dados quando o modal abre ou quando o aluno selecionado muda
   useEffect(() => {
     if (isOpen && student) {
-      const currentFee = Number(student.monthly_fee_amount) || 0;
+      const isScholar = Boolean(student.is_scholarship || (student as any).isScholarship);
+      const rawFee = Number(student.monthly_fee_amount) || 0;
+      const currentFee = isScholar ? 0 : (rawFee > 0 ? rawFee : 50);
       setFeeAmount(currentFee);
       setDueDay(student.due_day ?? 10);
-      setIsScholarship(Boolean(student.is_scholarship || (student as any).isScholarship));
+      setIsScholarship(isScholar);
     }
   }, [
     isOpen,
@@ -84,14 +86,17 @@ export const StudentActionsModal: React.FC<StudentActionsModalProps> = ({
       const finalFee = isScholarship ? 0 : (!isNaN(parsedFee) && parsedFee >= 0 ? parsedFee : 0);
       const finalDueDay = parsedDueDay && !isNaN(parsedDueDay) ? parsedDueDay : 10;
 
+      const studentFullName = (student.full_name || (student as any).name || (student as any).fullName || 'Aluno').trim();
+      const studentNickname = (student.nickname || '').trim() || studentFullName;
+
       const updatedStudent = await dbService.updateStudent(student.id, {
-        fullName: student.full_name,
-        nickname: student.nickname || undefined,
-        dateOfBirth: student.date_of_birth,
-        address: student.address || '',
-        whatsapp: student.whatsapp || undefined,
-        guardianName: student.guardian_name || undefined,
-        guardianPhone: student.guardian_phone || undefined,
+        fullName: studentFullName,
+        nickname: studentNickname,
+        dateOfBirth: student.date_of_birth || '2000-01-01',
+        address: (student.address || '').trim() || 'Não informado',
+        whatsapp: student.whatsapp?.trim() || undefined,
+        guardianName: student.guardian_name?.trim() || undefined,
+        guardianPhone: student.guardian_phone?.trim() || undefined,
         active: student.active ?? true,
         isScholarship,
         dueDay: finalDueDay,
@@ -127,12 +132,12 @@ export const StudentActionsModal: React.FC<StudentActionsModalProps> = ({
         <div className="flex items-start justify-between border-b border-[#25282f] pb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-black">
-              {student.full_name.charAt(0).toUpperCase()}
+              {(student.full_name || 'A').charAt(0).toUpperCase()}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-lg text-white">
-                  {student.full_name}
+                  {student.full_name || 'Aluno'}
                 </h3>
                 {student.nickname && (
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">

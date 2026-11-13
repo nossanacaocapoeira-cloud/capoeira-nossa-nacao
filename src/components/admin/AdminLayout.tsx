@@ -5,11 +5,8 @@ import { SupabaseSetupModal } from '../setup/SupabaseSetupModal';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import capoeiraLogo from '../../assets/images/regenerated_image_1788977954111.png';
 import {
-  LayoutDashboard,
   Users,
   Calendar,
-  ShoppingBag,
-  CreditCard,
   History,
   Cake,
   Settings,
@@ -32,11 +29,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [showSetupModal, setShowSetupModal] = useState(false);
 
   const menuItems = [
-    { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
     { label: 'Alunos', path: '/admin/alunos', icon: Users },
     { label: 'Mensalidades', path: '/admin/mensalidades', icon: Calendar },
-    { label: 'Produtos', path: '/admin/produtos', icon: ShoppingBag },
-    { label: 'Pagamentos', path: '/admin/pagamentos', icon: CreditCard },
     { label: 'Movimentações', path: '/admin/movimentacoes', icon: History },
     { label: 'Aniversariantes', path: '/admin/aniversariantes', icon: Cake },
     { label: 'Configurações', path: '/admin/configuracoes', icon: Settings },
@@ -111,8 +105,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           <nav className="space-y-1">
             {menuItems.map((item) => {
               const isActive =
-                item.path === '/admin'
-                  ? path === '/admin'
+                item.path === '/admin/alunos'
+                  ? path === '/admin' || path === '/admin/' || path.startsWith('/admin/alunos')
                   : path.startsWith(item.path);
               const Icon = item.icon;
               return (
@@ -210,8 +204,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               <nav className="space-y-1">
                 {menuItems.map((item) => {
                   const isActive =
-                    item.path === '/admin'
-                      ? path === '/admin'
+                    item.path === '/admin/alunos'
+                      ? path === '/admin' || path === '/admin/' || path.startsWith('/admin/alunos')
                       : path.startsWith(item.path);
                   const Icon = item.icon;
                   return (

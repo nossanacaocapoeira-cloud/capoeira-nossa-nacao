@@ -20,12 +20,9 @@ import { StudentProfile } from './components/student/StudentProfile';
 
 // Admin pages
 import { AdminLayout } from './components/admin/AdminLayout';
-import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminStudents } from './components/admin/AdminStudents';
 import { AdminStudentDetail } from './components/admin/AdminStudentDetail';
 import { AdminFees } from './components/admin/AdminFees';
-import { AdminProducts } from './components/admin/AdminProducts';
-import { AdminPayments } from './components/admin/AdminPayments';
 import { AdminMovements } from './components/admin/AdminMovements';
 import { AdminBirthdays } from './components/admin/AdminBirthdays';
 import { AdminSettings } from './components/admin/AdminSettings';
@@ -133,15 +130,9 @@ function AppRouter() {
 
     // Other Admin routes
     const cleanPath = path.split('?')[0];
-    let adminContent = <AdminDashboard />;
-    if (cleanPath === '/admin/alunos') {
-      adminContent = <AdminStudents />;
-    } else if (cleanPath === '/admin/mensalidades') {
+    let adminContent = <AdminStudents />;
+    if (cleanPath === '/admin/mensalidades') {
       adminContent = <AdminFees />;
-    } else if (cleanPath === '/admin/produtos') {
-      adminContent = <AdminProducts />;
-    } else if (cleanPath === '/admin/pagamentos') {
-      adminContent = <AdminPayments />;
     } else if (cleanPath === '/admin/movimentacoes') {
       adminContent = <AdminMovements />;
     } else if (cleanPath === '/admin/aniversariantes') {

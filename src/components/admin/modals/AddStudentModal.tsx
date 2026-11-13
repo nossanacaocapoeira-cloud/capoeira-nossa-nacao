@@ -87,7 +87,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
     >
       <div
         id="add-student-modal"
-        className="my-8 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl transition-all"
+        className="my-8 w-full max-w-lg rounded-2xl bg-white text-gray-900 p-6 shadow-2xl transition-all"
       >
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
           <div className="flex items-center space-x-2 text-red-600">
@@ -125,7 +125,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Nome completo do aluno"
-                className="w-full rounded-xl border border-gray-200 pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                className="w-full rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
                 required
               />
             </div>
@@ -143,7 +143,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="Ex: Cascavel, Pantera..."
-                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                className="w-full rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
               />
             </div>
 
@@ -159,7 +159,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                   type="date"
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                  className="w-full rounded-xl border border-gray-200 bg-white text-gray-900 [color-scheme:light] pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
                   required
                 />
               </div>
@@ -190,7 +190,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Rua, número, bairro, cidade"
-                className="w-full rounded-xl border border-gray-200 pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                className="w-full rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
                 required
               />
             </div>
@@ -209,7 +209,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="(11) 98888-8888"
-                className="w-full rounded-xl border border-gray-200 pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                className="w-full rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 pl-10 pr-3 py-2.5 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
               />
             </div>
           </div>
@@ -238,7 +238,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                   value={guardianName}
                   onChange={(e) => setGuardianName(e.target.value)}
                   placeholder="Ex: Maria da Silva"
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                  className="w-full rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
                 />
               </div>
 
@@ -252,7 +252,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                   value={guardianPhone}
                   onChange={(e) => setGuardianPhone(e.target.value)}
                   placeholder="Ex: (11) 99999-9999"
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                  className="w-full rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
                 />
               </div>
             </div>
@@ -290,7 +290,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ onClose, onSuc
                 value={dueDay}
                 onChange={(e) => setDueDay(e.target.value)}
                 placeholder="Ex: 10, 15, 20..."
-                className="w-full sm:w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+                className="w-full sm:w-48 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-3 py-2 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
               />
               <p className="text-[11px] text-gray-500 mt-1">
                 Dia fixo do mês em que as mensalidades recorrentes deverão vencer.

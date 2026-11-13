@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: {
           data: {
             full_name: payload.fullName.trim(),
-            nickname: payload.nickname?.trim() || null,
+            nickname: payload.nickname?.trim() || payload.fullName.trim(),
             date_of_birth: payload.dateOfBirth,
             address: payload.address.trim(),
             whatsapp: payload.whatsapp.trim(),

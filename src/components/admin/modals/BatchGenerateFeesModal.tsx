@@ -5,7 +5,7 @@ import { useToast } from '../../../contexts/ToastContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { dbService } from '../../../lib/dbService';
 import { supabase } from '../../../lib/supabase';
-import { formatCurrency } from '../../../lib/utils';
+import { formatCurrency, toReferenceYearMonth } from '../../../lib/utils';
 import { Users, Calendar, AlertCircle } from 'lucide-react';
 
 interface BatchGenerateFeesModalProps {
@@ -45,19 +45,34 @@ export function BatchGenerateFeesModal({ isOpen, onClose, onSuccess }: BatchGene
     try {
       const { data: students } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('role', 'student')
+        .select('id, deleted_at')
+        .neq('role', 'admin')
         .eq('active', true);
 
-      const totalActive = students?.length || 0;
-      setActiveCount(totalActive);
+      const activeStudentIds = new Set(
+        (students || [])
+          .filter((s: any) => !s.deleted_at)
+          .map((s: any) => s.id)
+      );
+      setActiveCount(activeStudentIds.size);
 
+      const targetRefYm = toReferenceYearMonth(referenceMonth.trim());
       const { data: existing } = await supabase
         .from('monthly_fees')
-        .select('student_id')
-        .eq('reference_month', referenceMonth.trim());
+        .select('student_id, reference_month, due_date, status, deleted_at')
+        .neq('status', 'cancelled');
 
-      setAlreadyBilledCount(existing?.length || 0);
+      const billedIds = new Set(
+        (existing || [])
+          .filter((f: any) => !f.deleted_at && activeStudentIds.has(f.student_id))
+          .filter((f: any) => {
+            const fYm = toReferenceYearMonth(f.reference_month) || (f.due_date ? f.due_date.substring(0, 7) : '');
+            return fYm === targetRefYm;
+          })
+          .map((f: any) => f.student_id)
+      );
+
+      setAlreadyBilledCount(billedIds.size);
     } catch (err) {
       console.error(err);
     } finally {

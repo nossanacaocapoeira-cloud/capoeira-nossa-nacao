@@ -53,6 +53,14 @@ export function AdminFees() {
   // Mapa de alterações pendentes locais (chave: studentId_referenceMonth)
   const [pendingChanges, setPendingChanges] = useState<Map<string, GridFeeChange>>(new Map());
 
+  // Rastreia a célula clicada quando o aluno precisou configurar o valor primeiro
+  const [pendingCellTrigger, setPendingCellTrigger] = useState<{
+    studentId: string;
+    referenceMonth: string;
+    monthLabel: string;
+    targetStatus: 'PAGO' | 'NÃO PAGO';
+  } | null>(null);
+
   // Modal de Ações do Aluno
   const [selectedStudentForActions, setSelectedStudentForActions] = useState<StudentWithBalance | null>(null);
 
@@ -103,6 +111,17 @@ export function AdminFees() {
 
   useEffect(() => {
     loadGridData(selectedYear);
+  }, [selectedYear, loadGridData]);
+
+  // Sincronização em tempo real quando qualquer pagamento, baixa ou mensalidade é alterada no app
+  useEffect(() => {
+    const handleFinancialUpdate = () => {
+      loadGridData(selectedYear);
+    };
+    window.addEventListener('capoeira:financial_updated', handleFinancialUpdate);
+    return () => {
+      window.removeEventListener('capoeira:financial_updated', handleFinancialUpdate);
+    };
   }, [selectedYear, loadGridData]);
 
   // Proteção contra saída acidental da página se houver alterações não salvas
@@ -212,7 +231,13 @@ export function AdminFees() {
     // Se aluno é PAGANTE e possui monthly_fee_amount = 0: não permitir lançar PAGO ou NÃO PAGO sem valor
     if ((nextTargetStatus === 'PAGO' || nextTargetStatus === 'NÃO PAGO') && !isScholarship) {
       if (configuredFee <= 0 && (!cell.amount || cell.amount <= 0)) {
-        toastError('Configure o valor mensal deste aluno primeiro.');
+        toastError(`Defina o valor da mensalidade de ${student.nickname || student.full_name} para aplicar.`);
+        setPendingCellTrigger({
+          studentId: student.id,
+          referenceMonth: cell.referenceMonth,
+          monthLabel: cell.monthLabel,
+          targetStatus: nextTargetStatus,
+        });
         setSelectedStudentForActions(student);
         return;
       }
@@ -933,31 +958,31 @@ export function AdminFees() {
         </>
       )}
 
-      {/* Barra Flutuante de Ação no Mobile (quando há alterações pendentes) */}
+      {/* Barra Flutuante de Ação (quando há alterações pendentes) */}
       {pendingChanges.size > 0 && (
-        <div className="lg:hidden fixed bottom-4 left-3 right-3 z-40 p-3 bg-[#141619]/95 border border-amber-500/40 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 animate-fade-in">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-6 z-40 p-3 sm:px-5 sm:py-3 bg-[#141619]/95 border border-amber-500/50 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-4 animate-fade-in ring-1 ring-amber-500/20">
+          <div className="flex items-center gap-2.5 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
             <div className="flex flex-col">
               <span className="text-xs font-black text-amber-300">
-                {pendingChanges.size} {pendingChanges.size === 1 ? 'alteração' : 'alterações'}
+                {pendingChanges.size} {pendingChanges.size === 1 ? 'alteração pronta' : 'alterações prontas'}
               </span>
-              <span className="text-[10px] text-neutral-400">Pronto para lançar</span>
+              <span className="text-[10px] text-neutral-400">Clique para salvar no banco</span>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleDiscardChanges}
-              className="px-2.5 py-1.5 text-xs text-neutral-400 hover:text-rose-400 bg-neutral-900 border border-neutral-700 rounded-xl"
+              className="px-2.5 py-1.5 text-xs text-neutral-400 hover:text-rose-400 bg-neutral-900 border border-neutral-700 rounded-xl cursor-pointer"
             >
               Descartar
             </button>
             <button
               onClick={() => setShowConfirmModal(true)}
-              className="px-3.5 py-1.5 text-xs font-black bg-amber-500 text-neutral-950 rounded-xl shadow active:scale-95 flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-black bg-amber-500 hover:bg-amber-400 text-neutral-950 rounded-xl shadow-lg active:scale-95 flex items-center gap-1.5 cursor-pointer"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Lançar</span>
+              <span>LANÇAR AGORA</span>
             </button>
           </div>
         </div>
@@ -968,15 +993,43 @@ export function AdminFees() {
         <StudentActionsModal
           student={selectedStudentForActions}
           isOpen={Boolean(selectedStudentForActions)}
-          onClose={() => setSelectedStudentForActions(null)}
+          onClose={() => {
+            setSelectedStudentForActions(null);
+            setPendingCellTrigger(null);
+          }}
           onSuccess={(updatedStudent) => {
             if (updatedStudent && selectedStudentForActions) {
+              const newFeeAmount = Number(updatedStudent.monthly_fee_amount) || 0;
+              const newDueDay = Number(updatedStudent.due_day) || 10;
+              const newIsScholarship = Boolean(updatedStudent.is_scholarship);
+
+              // Se uma célula acionou a configuração, aplica a alteração nela imediatamente!
+              if (pendingCellTrigger && pendingCellTrigger.studentId === selectedStudentForActions.id) {
+                if (!newIsScholarship && newFeeAmount > 0) {
+                  const key = `${selectedStudentForActions.id}_${pendingCellTrigger.referenceMonth}`;
+                  setPendingChanges((prev) => {
+                    const updated = new Map(prev);
+                    updated.set(key, {
+                      studentId: selectedStudentForActions.id,
+                      studentName: selectedStudentForActions.nickname || selectedStudentForActions.full_name,
+                      referenceMonth: pendingCellTrigger.referenceMonth,
+                      monthLabel: pendingCellTrigger.monthLabel,
+                      targetStatus: pendingCellTrigger.targetStatus,
+                      currentStatus: 'SEM MENSALIDADE',
+                      feeId: null,
+                      feeAmount: newFeeAmount,
+                      dueDay: newDueDay,
+                    });
+                    return updated;
+                  });
+                  success(`Mensalidade de ${pendingCellTrigger.monthLabel} definida para ${selectedStudentForActions.nickname || selectedStudentForActions.full_name}! Clique em "LANÇAR ALTERAÇÕES" para confirmar.`);
+                }
+              }
+              setPendingCellTrigger(null);
+
               setGridRows((prevRows) =>
                 prevRows.map((r) => {
                   if (r.student.id === selectedStudentForActions.id) {
-                    const newFeeAmount = Number(updatedStudent.monthly_fee_amount) || 0;
-                    const newDueDay = Number(updatedStudent.due_day) || 10;
-                    const newIsScholarship = Boolean(updatedStudent.is_scholarship);
                     return {
                       ...r,
                       student: {
@@ -985,11 +1038,15 @@ export function AdminFees() {
                         due_day: newDueDay,
                         is_scholarship: newIsScholarship,
                       },
-                      months: r.months.map((m) => ({
-                        ...m,
-                        isScholarship: newIsScholarship,
-                        status: newIsScholarship ? 'BOLSISTA' : m.status === 'BOLSISTA' ? 'NÃO PAGO' : m.status,
-                      })),
+                      months: r.months.map((m) => {
+                        const isTriggerMonth = pendingCellTrigger?.referenceMonth === m.referenceMonth;
+                        return {
+                          ...m,
+                          amount: newIsScholarship ? 0 : newFeeAmount,
+                          isScholarship: newIsScholarship,
+                          status: isTriggerMonth ? (newIsScholarship ? 'BOLSISTA' : pendingCellTrigger.targetStatus) : (newIsScholarship ? 'BOLSISTA' : m.status === 'BOLSISTA' ? 'NÃO PAGO' : m.status),
+                        };
+                      }),
                     };
                   }
                   return r;

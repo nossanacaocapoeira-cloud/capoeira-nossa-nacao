@@ -57,7 +57,7 @@ export const CancelMonthlyFeeModal: React.FC<CancelMonthlyFeeModalProps> = ({
     >
       <div
         id="cancel-fee-modal"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl transition-all"
+        className="w-full max-w-md rounded-2xl bg-white p-6 text-gray-900 shadow-2xl transition-all"
       >
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
           <div className="flex items-center space-x-2 text-red-600">
@@ -112,7 +112,7 @@ export const CancelMonthlyFeeModal: React.FC<CancelMonthlyFeeModalProps> = ({
               onChange={(e) => setReason(e.target.value)}
               placeholder="Ex: Mensalidade lançada em duplicidade ou valor incorreto..."
               rows={3}
-              className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
+              className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:outline-hidden focus:ring-2 focus:ring-red-500/20"
               required
             />
           </div>
